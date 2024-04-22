@@ -1,39 +1,13 @@
 from __future__ import print_function
 
-import matplotlib.pyplot as plt
-import PIL
-import tensorflow as tf
-import numpy as np
-import cv2, os
-import seaborn as sns
-import pandas as pd 
-import warnings
-from scipy.misc import toimage, imsave
-import glob
-import gc
-from sklearn.utils import shuffle
-from scipy.linalg import norm
-from scipy import sum, average
-from scipy.interpolate import RectBivariateSpline
 
-from tensorflow.python.keras.applications.vgg16 import VGG16
-from tensorflow.python.keras.applications.vgg16 import preprocess_input, decode_predictions
-from tensorflow.python.keras.preprocessing.image import ImageDataGenerator
-import keras, sys, time
+
 from tensorflow.python.keras.models import *
 from tensorflow.python.keras.layers import *
-from tensorflow.python.keras.optimizers import Adam
-# from keras.callbacks import TensorBoard, ModelCheckpoint
-from tensorflow.keras.callbacks import TensorBoard
-# from keras.callbacks import EarlyStopping
-from tensorflow.keras.callbacks import ModelCheckpoint
-from tensorflow.keras.callbacks import EarlyStopping
-from keras.utils import plot_model
+from tensorflow.python.keras.losses import *
+import tensorflow as tf
 
-from our_train_D2N_raytrace_datagen import DataGenerator
-#list visible devices
-from tensorflow.python.client import device_lib
-
+import tensorflow.keras.backend as K
 
 # Keras losses
 def mean_squared_error(y_true, y_pred):
@@ -95,35 +69,47 @@ def normal_loss(y_true, y_pred):
     normal_output = tf.reduce_mean((sum_square_d/n_pixels) - 0.5* (square_sum_d/square_n_pixels))
     return normal_output
 
-def depth_to_normal(y_pred_depth,y_true_normal, scale_pred,scale_true):
+def depth_to_normal(y_pred_depth, y_true_normal, scale_pred, scale_true):
     Scale = 127.5
 
-    depth_min = scale_pred[:,0:1,0:1]
-    depth_max = scale_pred[:,0:1,1:2]
+    depth_min = scale_pred[:, 0:1, 0:1, :]
+    depth_max = scale_pred[:, 0:1, 1:2, :]
     
-    normal_min = scale_true[:,0:1,2:3]  
-    normal_max = scale_true[:,0:1,3:4]
+    normal_min = scale_true[:, 0:1, 2:3, :]
+    normal_max = scale_true[:, 0:1, 3:4, :]
 
+    # Expand 'depth_min' and 'depth_max' to the same height and width as 'y_pred_depth'
+    depth_min = tf.tile(depth_min, [1, 128, 128, 1])
+    depth_max = tf.tile(depth_max, [1, 128, 128, 1])
+
+    # Rescale 'y_pred_depth' using 'depth_min' and 'depth_max'
     y_pred_depth = depth_min + (depth_max - depth_min) * y_pred_depth
+
+    # Expand 'normal_min' and 'normal_max' to the same height, width and channels as 'y_true_normal'
+    normal_min = tf.tile(normal_min, [1, 128, 128, 3])
+    normal_max = tf.tile(normal_max, [1, 128, 128, 3])
+
+    # Rescale 'y_true_normal' using 'normal_min' and 'normal_max'
     y_true_normal = normal_min + (normal_max - normal_min) * y_true_normal
     
+    # Calculate gradients
     zy, zx = tf.image.image_gradients(y_pred_depth)
+    zx = zx * Scale
+    zy = zy * Scale
     
-    zx = zx*Scale
-    zy = zy*Scale
-    
-    normal_ori = tf.concat([zy, -zx, tf.ones_like(y_pred_depth)], 3) 
+    # Calculate the normal from depth
+    normal_ori = tf.concat([zy, -zx, tf.ones_like(y_pred_depth)], 3)
     new_normal = tf.sqrt(tf.square(zx) +  tf.square(zy) + 1)
-    normal = normal_ori/new_normal
-   
-    normal += 1
-    normal /= 2
-        
-    return normal,y_true_normal
+    normal = normal_ori / new_normal
+    
+    # Normalize the normals to be between 0 and 1
+    normal = (normal + 1) / 2
+    
+    return normal, y_true_normal
 
 def vae_loss( y_true, y_pred):
     loss1 = mean_squared_error(y_true, y_pred)
-    loss2 = binary_crossentropy(y_true, y_pred)
+    loss2 = BinaryCrossentropy(y_true, y_pred)
     return tf.reduce_mean(loss1 + loss2)
 
 def scale_loss(y_true,y_pred):
@@ -146,8 +132,8 @@ def scale_loss(y_true,y_pred):
 
 def raytracing_loss(depth,normal,background,scale): 
     step = 255/2
-    n1 = 1;
-    n2 = 1.33;
+    n1 = 1
+    n2 = 1.33
       
     depth_min = scale[:,0:1,0:1]
     depth_max = scale[:,0:1,1:2]
@@ -194,6 +180,8 @@ def raytracing_loss(depth,normal,background,scale):
 
 def combined_loss(y_true,y_pred):
     #print(K.int_shape(y_true)[0],K.shape(y_pred))
+    print(y_true.shape)
+    print(y_pred.shape)
 
     depth_true = y_true[:,:,:,0]
     normal_true = y_true[:,:,:,1:4]
@@ -225,8 +213,8 @@ def combined_loss(y_true,y_pred):
     loss_normal = beta*(normal_loss(normal_true,normal_pred))
     
     #normal from depth
-    normal_from_depth, rescaled_true_normal = depth_to_normal(depth_pred,normal_true,scale_pred,scale_true)
-    loss_depth_to_normal = gamma*(normal_loss(rescaled_true_normal,normal_from_depth)) 
+    # normal_from_depth, rescaled_true_normal = depth_to_normal(depth_pred,normal_true,scale_pred,scale_true)
+    # loss_depth_to_normal = gamma*(normal_loss(rescaled_true_normal,normal_from_depth)) 
 
     #ray_tracing
     ray_traced_tensor= raytracing_loss(depth_pred,normal_pred,ref_true,scale_true)
@@ -241,4 +229,4 @@ def combined_loss(y_true,y_pred):
     #input image loss
     loss_in_img = lamda * vae_loss(img_true,img_pred)
 
-    return (loss_depth + loss_normal + loss_depth_to_normal + loss_ray_trace + loss_scale + loss_reference + loss_in_img)
+    return (loss_depth + loss_normal + loss_ray_trace + loss_scale + loss_reference + loss_in_img)

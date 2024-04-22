@@ -1,39 +1,8 @@
+from keras.models import Model
+from keras.layers import Conv2D, MaxPooling2D, Conv2DTranspose, concatenate, Input, Activation
+from keras.optimizers import Adam
 
-from __future__ import print_function
-
-import matplotlib.pyplot as plt
-import PIL
-import tensorflow as tf
-import numpy as np
-import cv2, os
-import seaborn as sns
-import pandas as pd 
-import warnings
-from scipy.misc import toimage, imsave
-import glob
-import gc
-from sklearn.utils import shuffle
-from scipy.linalg import norm
-from scipy import sum, average
-from scipy.interpolate import RectBivariateSpline
-
-from tensorflow.python.keras.applications.vgg16 import VGG16
-from tensorflow.python.keras.applications.vgg16 import preprocess_input, decode_predictions
-from tensorflow.python.keras.preprocessing.image import ImageDataGenerator
-import keras, sys, time
-from tensorflow.python.keras.models import *
-from tensorflow.python.keras.layers import *
-from tensorflow.python.keras.optimizers import Adam
-# from keras.callbacks import TensorBoard, ModelCheckpoint
-from tensorflow.keras.callbacks import TensorBoard
-# from keras.callbacks import EarlyStopping
-from tensorflow.keras.callbacks import ModelCheckpoint
-from tensorflow.keras.callbacks import EarlyStopping
-from keras.utils import plot_model
-
-from our_train_D2N_raytrace_datagen import DataGenerator
-#list visible devices
-from tensorflow.python.client import device_lib
+from utils import combined_loss
 
 
 
@@ -131,3 +100,27 @@ def FluidNet( nClasses, nClasses1 ,  input_height=128, input_width=128):
     model = Model(img_input, singleOut)
        
     return model
+
+def create_model():
+    model = FluidNet(nClasses=1, nClasses1=3)  # Adjust the number of classes based on your task
+
+    loss_funcs = {
+        "single_out": combined_loss,
+    }
+
+    loss_weights = {
+        "single_out": 1.0,
+    }
+    model.compile(optimizer=Adam(learning_rate=0.001),
+                  loss=loss_funcs,
+                  loss_weights=loss_weights,  
+                  metrics=['accuracy'])
+    model.summary()
+    return model
+
+
+if __name__ == "__main__":
+
+    model = create_model()
+
+        
