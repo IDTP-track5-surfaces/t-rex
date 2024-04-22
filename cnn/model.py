@@ -1,6 +1,7 @@
 from keras.models import Model
 from keras.layers import Conv2D, MaxPooling2D, Conv2DTranspose, concatenate, Input, Activation
 from keras.optimizers import Adam
+from functools import partial
 
 import tensorflow as tf
 
@@ -88,9 +89,34 @@ def FluidNet(nClasses = 1, nClasses1=3, input_height=128, input_width=128):
     model = Model(inputs=img_input, outputs=output)
     return model
 
+def threshold_accuracy(y_true, y_pred, threshold=1.25):
+    ratio = tf.maximum(y_true / y_pred, y_pred / y_true)
+    return tf.reduce_mean(tf.cast(ratio < threshold, tf.float32))
+
 def create_model():
+    # Creating partial functions for each threshold
+    accuracy_125 = partial(threshold_accuracy, threshold=1.25)
+    accuracy_125.__name__ = 'accuracy_125'
+
+    accuracy_15625 = partial(threshold_accuracy, threshold=1.25**2)
+    accuracy_15625.__name__ = 'accuracy_15625'
+
+    accuracy_1953125 = partial(threshold_accuracy, threshold=1.25**3)
+    accuracy_1953125.__name__ = 'accuracy_1953125'
+
+
     model = FluidNet(nClasses=1)  # Adjust the number of classes if necessary
-    model.compile(optimizer=Adam(learning_rate=0.001), loss=depth_loss, metrics=["MeanSquaredError"])
+    model.compile(
+        optimizer='adam', 
+        loss=depth_loss, 
+        metrics=[
+            tf.keras.metrics.RootMeanSquaredError(), 
+            tf.keras.metrics.MeanAbsoluteError(),
+            accuracy_125,
+            accuracy_15625,
+            accuracy_1953125
+        ]
+    )
     model.summary()
     return model
 
