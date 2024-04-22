@@ -7,15 +7,12 @@ from dataloader import load_and_preprocess_data
 
 
 
-def train_model(model, input_tensors, depth_tensors, normal_tensors, epochs=10, batch_size=32):
+def train_model(model, input_tensors, depth_tensors, epochs=10, batch_size=32):
     # Expand dimensions of depth tensor from [5400,128,128] to [5400,128,128,1] to match normal tensor
     depth_tensors_expanded = tf.expand_dims(depth_tensors, axis=-1)
 
-    # Concatenate the depth and normal tensors along the last dimension to match the model's output
-    combined_y_true = tf.concat([depth_tensors_expanded, normal_tensors], axis=-1)
-
     # Train the model with the combined ground truth tensor
-    history = model.fit(input_tensors, combined_y_true,
+    history = model.fit(input_tensors, depth_tensors_expanded,
                         epochs=epochs,
                         batch_size=batch_size,
                         validation_split=0.2)
@@ -45,7 +42,7 @@ if __name__ == "__main__":
     with tf.device('/cpu:0'):  # Use '/gpu:0' if TensorFlow-Metal is installed
         model = create_model()
         input_tensors, depth_tensors, normal_tensors = load_and_preprocess_data()
-        train_model(model, input_tensors, depth_tensors, normal_tensors)
+        train_model(model, input_tensors, depth_tensors)
 
         
 
