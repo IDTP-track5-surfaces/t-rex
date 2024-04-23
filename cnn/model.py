@@ -93,6 +93,14 @@ def threshold_accuracy(y_true, y_pred, threshold=1.25):
     ratio = tf.maximum(y_true / y_pred, y_pred / y_true)
     return tf.reduce_mean(tf.cast(ratio < threshold, tf.float32))
 
+def absolute_relative_error(y_true, y_pred):
+    # Avoid division by zero
+    y_true = tf.cast(y_true, dtype=tf.float32)
+    epsilon = tf.keras.backend.epsilon()  # Small constant for numerical stability
+    # Calculate Absolute Relative Error
+    are = tf.abs((y_true - y_pred) / (y_true + epsilon))
+    return tf.reduce_mean(are)
+
 def create_model():
     # Creating partial functions for each threshold
     accuracy_125 = partial(threshold_accuracy, threshold=1.25)
@@ -111,14 +119,23 @@ def create_model():
         loss=depth_loss, 
         metrics=[
             tf.keras.metrics.RootMeanSquaredError(), 
-            tf.keras.metrics.MeanAbsoluteError(),
+            absolute_relative_error,
             accuracy_125,
             accuracy_15625,
             accuracy_1953125
         ]
     )
     model.summary()
-    return model
+
+    custom_objects = {
+    'accuracy_125': accuracy_125,
+    'accuracy_15625': accuracy_15625,
+    'accuracy_1953125': accuracy_1953125,
+    'depth_loss': depth_loss,  # Assuming combined_loss is your custom loss function
+    'absolute_relative_error': absolute_relative_error
+}
+
+    return model , custom_objects
 
 
 if __name__ == "__main__":
