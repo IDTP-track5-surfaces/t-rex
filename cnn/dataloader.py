@@ -4,10 +4,10 @@ import os
 from PIL import Image
 from tqdm import tqdm
 
-REFRACTED_DIR = "/Users/mohamedgamil/Desktop/Eindhoven/block3/idp/code/t-rex/data/validation/render"
-DEPTH_DIR = "/Users/mohamedgamil/Desktop/Eindhoven/block3/idp/code/t-rex/data/validation/depth_map"
-NORMAL_DIR = "/Users/mohamedgamil/Desktop/Eindhoven/block3/idp/code/t-rex/data/validation/normal_map"
-REFERENCE_DIR = "/Users/mohamedgamil/Desktop/Eindhoven/block3/idp/code/t-rex/data/validation/reference"
+REFRACTED_DIR = "/Users/mohamedgamil/Desktop/Eindhoven/block3/idp/code/t-rex/data/data_sets/refraction"
+DEPTH_DIR = "/Users/mohamedgamil/Desktop/Eindhoven/block3/idp/code/t-rex/data/data_sets/depth"
+REFERENCE_DIR = "/Users/mohamedgamil/Desktop/Eindhoven/block3/idp/code/t-rex/data/data_sets/references"
+NORMAL_DIR = "/Users/mohamedgamil/Desktop/Eindhoven/block3/idp/code/t-rex/data/data_sets/normal"
 
 class Sample:
     def __init__(self, refracted, reference, depth, normal):
@@ -23,6 +23,21 @@ def get_file_id(file_path):
     """
     file_name = os.path.basename(file_path)
     return file_name.split('_')[1]
+
+def extract_sequence(full_path):
+    # Extract the filename from the full path
+    filename = os.path.basename(full_path)
+    filename, _ = os.path.splitext(filename)
+    
+    # Assuming the prefix is 'depth_map_'
+    depth_prefix = 'depth_map_'
+    normal_prefix = 'normal_map_'
+    if filename.startswith(depth_prefix):
+        return filename[len(depth_prefix):]
+    elif filename.startswith(normal_prefix):
+        return filename[len(normal_prefix):]
+    else:
+        return "Invalid filename"
 
 def get_reference_file(file_path , reference_dir):
     """
@@ -43,7 +58,7 @@ def get_file_paths(refracted_dir = REFRACTED_DIR, depth_dir = DEPTH_DIR, normal_
     # Create a dictionary to match depth files with normal files based on IDs
     depth_files = [os.path.join(depth_dir, f) for f in os.listdir(depth_dir) if f.endswith('.npy')]
     normal_files = [os.path.join(normal_dir, f) for f in os.listdir(normal_dir) if f.endswith('.npy')]
-    refracted_files = [os.path.join(root, file) for root, _, files in os.walk(refracted_dir) for file in files if file.endswith('.png')]
+    refracted_files = [os.path.join(refracted_dir, f) for f in os.listdir(refracted_dir) if f.endswith('.png')]
 
     print("Number of files in depth directory: ", len(depth_files))
     print("Number of files in normal directory: ", len(normal_files))
@@ -77,18 +92,17 @@ def load_samples(refracted_files, depth_files, normal_files, reference_dir = REF
     matched_samples = []
     progress_bar = tqdm(total=len(depth_files), desc="Matching files", unit="file")
     for depth_file in depth_files:
-        depth_id = get_file_id(depth_file)
+        depth_id = extract_sequence(depth_file)
+        # print("Depth ID: ", depth_id)
         for normal_file in normal_files:
-            normal_id = get_file_id(normal_file)
+            normal_id = extract_sequence(normal_file)
+            # print("Normal ID: ", normal_id)
             if depth_id == normal_id:
+                # print("Matched depth and normal files")
                 for refracted_file in refracted_files:
-                    refracted_id = get_file_id(refracted_file)
-
-                    if len(refracted_id) <6: # If the file id is less than 6 digits, append zeros to the front
-                        refracted_id = '0'*(6-len(refracted_id)) + refracted_id
-
+                    grid_name, refracted_id = split_filename(refracted_file)
                     if depth_id == refracted_id:
-                        reference_file = get_reference_file(refracted_file, reference_dir)
+                        reference_file = os.path.join(reference_dir, grid_name + ".png")
                         sample = Sample(refracted_file, reference_file, depth_file, normal_file)
                         matched_samples.append(sample)
 
@@ -97,6 +111,23 @@ def load_samples(refracted_files, depth_files, normal_files, reference_dir = REF
     progress_bar.close()
 
     return matched_samples
+
+def split_filename(full_path):
+    # Extract the filename from the full path
+    filename = os.path.basename(full_path)
+    filename, _ = os.path.splitext(filename)
+    
+    # Split the filename by underscore
+    parts = filename.split('_')
+    
+    # The first part (grid number)
+    grid_part = parts[0]
+    
+    # Join the remaining parts back with underscores
+    remaining_part = '_'.join(parts[1:])
+    # print("Grid part: ", grid_part)
+    # print("Remaining part: ", remaining_part)
+    return grid_part, remaining_part
 
 def preprocess_data(matched_samples):
     """
@@ -111,7 +142,7 @@ def preprocess_data(matched_samples):
     depth_tensors = []
     normal_tensors = []
 
-    progress_bar = tqdm(total=len(matched_samples), desc="Loading and preprocessing data", unit="sample")
+    progress_bar = tqdm(total=len(matched_samples), desc="Preprocessing data", unit="sample")
     for sample in matched_samples:
         refracted_tensor = load_image_as_tensor(sample.refracted)
         reference_tensor = load_image_as_tensor(sample.reference)
@@ -148,7 +179,7 @@ def load_and_preprocess_data():
     """
     Load and preprocess refracted and reference images, depth maps, and normal maps from directories.
     """
-
+    print("Getting file paths...")
     depth_files, normal_files, refracted_files = get_file_paths(REFRACTED_DIR, DEPTH_DIR, NORMAL_DIR)
     matched_samples = load_samples(refracted_files, depth_files, normal_files, REFERENCE_DIR)
     print("Number of matched samples: ", len(matched_samples))
@@ -160,75 +191,10 @@ def load_and_preprocess_data():
 
     return input_tensors, depth_tensors, normal_tensors
 
-def debug():
-
-    print("DEBUG_LOG: Starting debug function to check for unpaired files. Testing load_and_preprocess_data() function.")
-
-    depth_files, normal_files, refracted_files = get_file_paths(REFRACTED_DIR, DEPTH_DIR, NORMAL_DIR)
-    matched_samples = load_samples(refracted_files, depth_files, normal_files, REFERENCE_DIR)
-    print("Number of matched samples: ", len(matched_samples))
-
-
-
-    paired_depth_ids = []
-    paired_normal_ids = []
-    paired_refracted_ids = []
-    for sample in matched_samples:
-        depth_path  = sample.depth_file
-        normal_path = sample.normal_file
-        refracted_path = sample.refracted
-
-        paired_depth_id = get_file_id(depth_path)
-        paired_normal_id = get_file_id(normal_path)
-        paired_refracted_id = get_file_id(refracted_path)
-
-        paired_depth_ids.append(paired_depth_id)
-        paired_normal_ids.append(paired_normal_id)
-        paired_refracted_ids.append(paired_refracted_id)
-    
-    unpaired_depth_id = []
-    for file in depth_files:
-        file_id = get_file_id(file)
-        if file_id not in paired_depth_ids:
-            unpaired_depth_id.append(file_id)
-    unpaired_depth_ids = sorted(unpaired_depth_id)
-    
-    unpaired_normal_id = []
-    for file in normal_files:
-        file_id = get_file_id(file)
-        if file_id not in paired_normal_ids:
-            unpaired_normal_id.append(file_id)
-    unpaired_normal_ids = sorted(unpaired_normal_id)
-
-    unpaired_refracted_id = []
-    for file in refracted_files:
-        file_id = get_file_id(file)
-
-        if not file_id.isdigit():
-            print("File ID is not an integer: ", file_id , " in ", file)
-
-
-        if file_id not in paired_refracted_ids:
-            unpaired_refracted_id.append(file_id)
-    unpaired_refracted_ids = sorted(unpaired_refracted_id)
-
-
-    concatenatd_ids = []
-    for i in range(len(unpaired_depth_ids)):
-        concatenated = [unpaired_depth_ids[i], unpaired_normal_ids[i], unpaired_refracted_ids[i]]
-        concatenatd_ids.append(concatenated)                    
-
-    for entry in concatenatd_ids:
-        print(entry)
-
-    print("DEBUG_LOG: Number of unpaired files: ", len(concatenatd_ids))
-    return 0
-
 if __name__ == "__main__":
 
     # Load and preprocess data
     load_and_preprocess_data()
-    # debug()
 
 
         
