@@ -74,10 +74,10 @@ def load_numpy_array(file_path):
 
 def load_image_as_tensor(image_path, image_size=(128, 128)):
     """
-    Load an image file as a TensorFlow tensor and resize it.
+    Load an image file as a TensorFlow tensor in grayscale and resize it.
     """
     image = tf.io.read_file(image_path)
-    image = tf.image.decode_png(image, channels=3)
+    image = tf.image.decode_png(image, channels=3) # Adjust channels for grayscale
     image = tf.image.resize(image, image_size)
     image = tf.cast(image, tf.float32) / 255.0  # Normalize to [0, 1]
     return image
@@ -166,6 +166,11 @@ def preprocess_data(matched_samples):
     reference_tensors = tf.stack(reference_tensors)
     depth_tensors = tf.stack(depth_tensors)
     normal_tensors = tf.stack(normal_tensors)
+
+
+    max_depth = tf.reduce_max(depth_tensors) # Normalize depth maps by the maximum depth value
+    print("Max depth: ", max_depth)
+    depth_tensors = depth_tensors / max_depth
 
     print("Refracted tensors shape: ", refracted_tensors.shape)
     print("Reference tensors shape: ", reference_tensors.shape)

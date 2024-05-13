@@ -62,11 +62,12 @@ def calculate_metrics(y_true, y_pred):
 if __name__ == "__main__":
 
     with tf.device('/gpu:0'):  # Use '/gpu:0' if TensorFlow-Metal is installed
-        model , custom_objects = create_model()
+
         input_tensors, depth_tensors, normal_tensors = load_and_preprocess_data()
+        model , custom_objects = create_model()
         history = train_model(model, input_tensors, depth_tensors)
         plot_metrics(history)
-        model.save('fluid_net.h5')
+        model.save('fluid_net_scaled.h5')
 
         # Expand the depth tensors to have an extra dimension
         depth_tensors = np.expand_dims(depth_tensors, axis=-1)
@@ -79,12 +80,12 @@ if __name__ == "__main__":
         test_depth = tf.gather(depth_tensors, random_indices)
 
         # Inference test
-        loaded_model = tf.keras.models.load_model('fluid_net.h5', custom_objects=custom_objects)
+        loaded_model = tf.keras.models.load_model('fluid_net_scaled.h5', custom_objects=custom_objects)
         test_predictions = loaded_model.predict(test_input)
 
         # Use tf.gather for refracted and reference tensors, assuming they are part of input_tensors and follow channels
-        refracted_tensors = tf.gather(input_tensors[:, :, :, :3], random_indices)
-        reference_tensors = tf.gather(input_tensors[:, :, :, 3:], random_indices)
+        refracted_tensors = tf.gather(input_tensors[:, :, :, :3], random_indices) # Adjust for grayscale images
+        reference_tensors = tf.gather(input_tensors[:, :, :, 3:], random_indices) # Adjust for grayscale images
 
         # Plot the results with the ground truth
         fig, axes = plt.subplots(3, 4, figsize=(12, 12))
