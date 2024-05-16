@@ -9,6 +9,9 @@ import tensorflow as tf
 
 import tensorflow.keras.backend as K
 
+import os
+import shutil
+
 # Keras losses
 def mean_squared_error(y_true, y_pred):
     return K.mean(K.square(y_pred - y_true), axis=-1)
@@ -230,3 +233,8 @@ def combined_loss(y_true,y_pred):
     loss_in_img = lamda * vae_loss(img_true,img_pred)
 
     return (loss_depth + loss_normal + loss_ray_trace + loss_scale + loss_reference + loss_in_img)
+
+def move_file(file_path, dest_dir):
+    if os.path.exists(file_path):
+        dest_path = os.path.join(dest_dir, os.path.basename(file_path))
+        shutil.move(file_path, dest_path)
