@@ -32,8 +32,6 @@ def preprocess_data(matched_samples):
     Extending the function to load and preprocess data.
     """
 
-    # Your existing matching logic here...
-
     # Convert matched samples into TensorFlow dataset
     refracted_tensors = []
     reference_tensors = []
@@ -66,10 +64,9 @@ def preprocess_data(matched_samples):
     normal_tensors = tf.stack(normal_tensors)
 
 
-    max_depth = tf.reduce_max(depth_tensors) # Normalize depth maps by the maximum depth value
-    print("Max depth: ", max_depth)
-    depth_tensors = depth_tensors / max_depth
-
+    max_depth_per_sample = tf.reduce_max(depth_tensors, axis=[1, 2], keepdims=True)
+    depth_tensors = depth_tensors / max_depth_per_sample
+    
     print("Refracted tensors shape: ", refracted_tensors.shape)
     print("Reference tensors shape: ", reference_tensors.shape)
 
