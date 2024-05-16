@@ -1,5 +1,7 @@
 import os
 from tqdm import tqdm
+import random
+import shutil
 
 class Sample:
     def __init__(self, refracted, reference, depth, normal):
@@ -32,6 +34,16 @@ class Filepaths:
         elif file_name.endswith('.png'): # return the filename without the extension
             return file_name.split('.')[0]
     
+    def file_from_id(self, file_id):
+        """
+        Find the set of file paths from the ID
+        """
+        depth_path = os.path.join(self.depth_dir, '_' + file_id + '.npy')
+        normal_path = os.path.join(self.normal_dir, '_' + file_id + '.npy') 
+
+        # 
+        return depth_path, normal_path
+
 
     def get_reference_file(self, file_path , reference_dir):
         """
@@ -79,6 +91,8 @@ class Filepaths:
         # Match depth, normal, and refracted files based on the file ID 
         matched_samples = []
         progress_bar = tqdm(total=len(depth_files), desc="Matching files", unit="file")
+        test_counter = 0
+        test_indices = []
         for depth_file in depth_files:
             depth_id = self.get_file_id(depth_file)
             # print("Depth ID: ", depth_id)
@@ -104,6 +118,7 @@ class Filepaths:
             progress_bar.update(1)
         progress_bar.close()
 
+        print("Number of matched samples: ", len(matched_samples))
         return matched_samples
 
     def split_filename(self,full_path):
@@ -123,58 +138,95 @@ class Filepaths:
         # print("Remaining part: ", remaining_part)
         return grid_part, remaining_part
     
+    def move_samples(samples, validation_dir):
+        if not os.path.exists(validation_dir):
+            os.makedirs(validation_dir)
+        
+        for sample in samples:
+            # Create subdirectories if they do not exist
+            depth_dir = os.path.join(validation_dir, 'depth')
+            normal_dir = os.path.join(validation_dir, 'normal')
+            refracted_subdir = os.path.basename(os.path.dirname(sample.refracted))
+            refracted_dir = os.path.join(validation_dir, 'refraction', refracted_subdir)
+            if not os.path.exists(depth_dir):
+                os.makedirs(depth_dir)
+            if not os.path.exists(normal_dir):
+                os.makedirs(normal_dir)
+            if not os.path.exists(refracted_dir):
+                os.makedirs(refracted_dir)
+
+            # Define destination paths
+            dest_path_depth = os.path.join(depth_dir, os.path.basename(sample.depth_file))
+            dest_path_normal = os.path.join(normal_dir, os.path.basename(sample.normal_file))
+            dest_path_refracted = os.path.join(refracted_dir, os.path.basename(sample.refracted))
+
+            # Move files
+            shutil.move(sample.depth_file, dest_path_depth)
+            print(f"Moved depth file {sample.depth_file} to {dest_path_depth}")
+            shutil.move(sample.normal_file, dest_path_normal)
+            print(f"Moved normal file {sample.normal_file} to {dest_path_normal}")
+            shutil.move(sample.refracted, dest_path_refracted)
+            print(f"Moved refracted file {sample.refracted} to {dest_path_refracted}")
+
+    def debug(root_dir):
+        filepaths = Filepaths(root_dir)
+        matched_samples = filepaths.match_samples(filepaths.depth_files, filepaths.normal_files, filepaths.refracted_files, filepaths.reference_dir)
+        paired_depth_ida = []
+        paired_normal_ida = []
+        paired_refracted_ida = []
+
+        for sample in matched_samples:
+            depth_path = sample.depth_file
+            normal_path = sample.normal_file
+            refracted_path = sample.refracted
+
+            paired_depth_id = filepaths.get_file_id(depth_path)
+            paired_normal_id = filepaths.get_file_id(normal_path)
+            paired_refracted_id = filepaths.get_file_id(refracted_path)
+
+            paired_depth_ida.append(paired_depth_id)
+            paired_normal_ida.append(paired_normal_id)
+            paired_refracted_ida.append(paired_refracted_id)
+
+        unpaired_depth_ida = []
+        for file in filepaths.depth_files:
+            depth_id = filepaths.get_file_id(file)
+            if depth_id not in paired_depth_ida:
+                unpaired_depth_ida.append(depth_id)
+        unpaired_depth_ida = sorted(unpaired_depth_ida)
+
+        unpaired_normal_ida = []
+        for file in filepaths.normal_files:
+            normal_id = filepaths.get_file_id(file)
+            if normal_id not in paired_normal_ida:
+                unpaired_normal_ida.append(normal_id)
+        unpaired_normal_ida = sorted(unpaired_normal_ida)
+
+        unpaired_refracted_ida = []
+        for file in filepaths.refracted_files:
+            refracted_id = filepaths.get_file_id(file)
+            if refracted_id not in paired_refracted_ida:
+                unpaired_refracted_ida.append(refracted_id)
+        unpaired_refracted_ida = sorted(unpaired_refracted_ida)
+
+
+        concatenated_ida = []
+        for i in range(len(paired_depth_ida)):
+            concatenated = [unpaired_depth_ida[i], unpaired_normal_ida[i], unpaired_refracted_ida[i]]
+            concatenated_ida.append(concatenated)
+
+        for entry in concatenated_ida:
+            print(entry)
 
 if __name__ == "__main__":
-    root_dir = '/Users/mohamedgamil/Desktop/Eindhoven/block3/idp/code/t-rex/data/homemade'
+    root_dir = '/Users/mohamedgamil/Desktop/Eindhoven/block3/idp/code/t-rex/data/dynamic'
+    validation_dir = os.path.join(root_dir, 'validation')
     filepaths = Filepaths(root_dir)
     matched_samples = filepaths.match_samples(filepaths.depth_files, filepaths.normal_files, filepaths.refracted_files, filepaths.reference_dir)
 
-    # paired_depth_ida = []
-    # paired_normal_ida = []
-    # paired_refracted_ida = []
-
-    # for sample in matched_samples:
-    #     depth_path = sample.depth_file
-    #     normal_path = sample.normal_file
-    #     refracted_path = sample.refracted
-
-    #     paired_depth_id = filepaths.get_file_id(depth_path)
-    #     paired_normal_id = filepaths.get_file_id(normal_path)
-    #     paired_refracted_id = filepaths.get_file_id(refracted_path)
-
-    #     paired_depth_ida.append(paired_depth_id)
-    #     paired_normal_ida.append(paired_normal_id)
-    #     paired_refracted_ida.append(paired_refracted_id)
-
-    # unpaired_depth_ida = []
-    # for file in filepaths.depth_files:
-    #     depth_id = filepaths.get_file_id(file)
-    #     if depth_id not in paired_depth_ida:
-    #         unpaired_depth_ida.append(depth_id)
-    # unpaired_depth_ida = sorted(unpaired_depth_ida)
-
-    # unpaired_normal_ida = []
-    # for file in filepaths.normal_files:
-    #     normal_id = filepaths.get_file_id(file)
-    #     if normal_id not in paired_normal_ida:
-    #         unpaired_normal_ida.append(normal_id)
-    # unpaired_normal_ida = sorted(unpaired_normal_ida)
-
-    # unpaired_refracted_ida = []
-    # for file in filepaths.refracted_files:
-    #     refracted_id = filepaths.get_file_id(file)
-    #     if refracted_id not in paired_refracted_ida:
-    #         unpaired_refracted_ida.append(refracted_id)
-    # unpaired_refracted_ida = sorted(unpaired_refracted_ida)
-
-
-    # concatenated_ida = []
-    # for i in range(len(paired_depth_ida)):
-    #     concatenated = [unpaired_depth_ida[i], unpaired_normal_ida[i], unpaired_refracted_ida[i]]
-    #     concatenated_ida.append(concatenated)
-
-    # for entry in concatenated_ida:
-    #     print(entry)
+    # Randomly select 20% of all matched samples
+    num_validation_samples = int(0.2 * len(matched_samples))
+    validation_samples = random.sample(matched_samples, num_validation_samples)
     
-
-    print("Number of matched samples: ", len(matched_samples))
+    # Move the selected samples to the validation directory
+    Filepaths.move_samples(validation_samples, validation_dir)
