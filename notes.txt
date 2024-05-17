@@ -1,0 +1,9 @@
+##NOTE:
+
+# The model still failed when training on dynamic data and validating on homemade data. The final val_loss was inorder of 0.01
+
+# I will now try to train on both homemade and dynamic data and validate on homemade data:
+        # You can see that the val loss just starts off being low and continues that way. 
+        # There is something critically different in the loss calculation between both the original and homemade data.
+
+
