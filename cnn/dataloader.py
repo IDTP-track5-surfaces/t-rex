@@ -63,7 +63,7 @@ def preprocess_data(matched_samples):
     depth_tensors = tf.stack(depth_tensors)
     normal_tensors = tf.stack(normal_tensors)
 
-
+    # Normalize depth tensors
     max_depth_per_sample = tf.reduce_max(depth_tensors, axis=[1, 2], keepdims=True)
     depth_tensors = depth_tensors / max_depth_per_sample
     

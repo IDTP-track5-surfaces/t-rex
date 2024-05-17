@@ -161,10 +161,12 @@ class Filepaths:
             dest_path_refracted = os.path.join(refracted_dir, os.path.basename(sample.refracted))
 
             # Move files
-            shutil.move(sample.depth_file, dest_path_depth)
-            print(f"Moved depth file {sample.depth_file} to {dest_path_depth}")
-            shutil.move(sample.normal_file, dest_path_normal)
-            print(f"Moved normal file {sample.normal_file} to {dest_path_normal}")
+            if not os.path.exists(dest_path_depth):
+                shutil.move(sample.depth_file, dest_path_depth)
+                print(f"Moved depth file {sample.depth_file} to {dest_path_depth}")
+            if not os.path.exists(dest_path_normal):
+                shutil.move(sample.normal_file, dest_path_normal)
+                print(f"Moved normal file {sample.normal_file} to {dest_path_normal}")
             shutil.move(sample.refracted, dest_path_refracted)
             print(f"Moved refracted file {sample.refracted} to {dest_path_refracted}")
 
@@ -219,14 +221,19 @@ class Filepaths:
             print(entry)
 
 if __name__ == "__main__":
-    root_dir = '/Users/mohamedgamil/Desktop/Eindhoven/block3/idp/code/t-rex/data/dynamic'
-    validation_dir = os.path.join(root_dir, 'validation')
-    filepaths = Filepaths(root_dir)
-    matched_samples = filepaths.match_samples(filepaths.depth_files, filepaths.normal_files, filepaths.refracted_files, filepaths.reference_dir)
+    root_dir = '/Users/mohamedgamil/Desktop/Eindhoven/block3/idp/code/t-rex/data/homemade/validation'
+    Filepaths.debug(root_dir)
 
-    # Randomly select 20% of all matched samples
-    num_validation_samples = int(0.2 * len(matched_samples))
-    validation_samples = random.sample(matched_samples, num_validation_samples)
+
+
+    # root_dir = '/Users/mohamedgamil/Desktop/Eindhoven/block3/idp/code/t-rex/data/homemade'
+    # validation_dir = os.path.join(root_dir, 'validation')
+    # filepaths = Filepaths(root_dir)
+    # matched_samples = filepaths.match_samples(filepaths.depth_files, filepaths.normal_files, filepaths.refracted_files, filepaths.reference_dir)
+
+    # # Randomly select 20% of all matched samples
+    # num_validation_samples = int(0.2 * len(matched_samples))
+    # validation_samples = random.sample(matched_samples, num_validation_samples)
     
-    # Move the selected samples to the validation directory
-    Filepaths.move_samples(validation_samples, validation_dir)
+    # # Move the selected samples to the validation directory
+    # Filepaths.move_samples(validation_samples, validation_dir)
