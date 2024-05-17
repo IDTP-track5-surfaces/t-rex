@@ -12,6 +12,7 @@ import tensorflow.keras.backend as K
 import os
 import shutil
 
+import matplotlib.pyplot as plt
 # Keras losses
 def mean_squared_error(y_true, y_pred):
     return K.mean(K.square(y_pred - y_true), axis=-1)
@@ -238,3 +239,51 @@ def move_file(file_path, dest_dir):
     if os.path.exists(file_path):
         dest_path = os.path.join(dest_dir, os.path.basename(file_path))
         shutil.move(file_path, dest_path)
+
+def plot_metrics(history):
+    # Plot training & validation loss values
+    plt.figure(figsize=(14, 5))
+    
+    plt.subplot(1, 2, 1)
+    plt.plot(history.history['loss'])
+    plt.plot(history.history['val_loss'])
+    plt.title('Model Loss')
+    plt.ylabel('Loss')
+    plt.xlabel('Epoch')
+    plt.legend(['Train', 'Validation'], loc='upper right')
+    
+    # Plot each of the other metrics
+    metrics = [key for key in history.history.keys() if 'loss' not in key and 'val_' in key]
+    for metric in metrics:
+        plt.subplot(1, 2, 2)
+        plt.plot(history.history[metric.replace('val_', '')], label=f'Train {metric}')
+        plt.plot(history.history[metric], label=f'Validation {metric}')
+        plt.title('Model Metrics')
+        plt.ylabel('Metric Value')
+        plt.xlabel('Epoch')
+        plt.legend(loc='upper right')
+    
+    plt.tight_layout()
+    plt.show()
+    
+def calculate_metrics(y_true, y_pred):
+    # Calculate the accuracy metrics
+    acc_125 = threshold_accuracy(y_true, y_pred, 1.25).numpy()
+    acc_15625 = threshold_accuracy(y_true, y_pred, 1.25**2).numpy()
+    acc_1953125 = threshold_accuracy(y_true, y_pred, 1.25**3).numpy()
+    rmse = tf.keras.metrics.RootMeanSquaredError()(y_true, y_pred).numpy()
+    mae = tf.keras.metrics.MeanAbsoluteError()(y_true, y_pred).numpy()
+
+    return acc_125, acc_15625, acc_1953125, rmse, mae
+
+def threshold_accuracy(y_true, y_pred, threshold=1.25):
+    ratio = tf.maximum(y_true / y_pred, y_pred / y_true)
+    return tf.reduce_mean(tf.cast(ratio < threshold, tf.float32))
+
+def absolute_relative_error(y_true, y_pred):
+    # Avoid division by zero
+    y_true = tf.cast(y_true, dtype=tf.float32)
+    epsilon = tf.keras.backend.epsilon()  # Small constant for numerical stability
+    # Calculate Absolute Relative Error
+    are = tf.abs((y_true - y_pred) / (y_true + epsilon))
+    return tf.reduce_mean(are)
