@@ -4,6 +4,7 @@ from keras.optimizers import Adam
 from functools import partial
 
 import tensorflow as tf
+from utils import threshold_accuracy, absolute_relative_error
 
 def depth_loss(y_true, y_pred):
     # Squared differences
@@ -102,17 +103,7 @@ def FluidNet(nClasses = 1, nClasses1=3, input_height=128, input_width=128):
     model = Model(inputs=img_input, outputs=output)
     return model
 
-def threshold_accuracy(y_true, y_pred, threshold=1.25):
-    ratio = tf.maximum(y_true / y_pred, y_pred / y_true)
-    return tf.reduce_mean(tf.cast(ratio < threshold, tf.float32))
 
-def absolute_relative_error(y_true, y_pred):
-    # Avoid division by zero
-    y_true = tf.cast(y_true, dtype=tf.float32)
-    epsilon = tf.keras.backend.epsilon()  # Small constant for numerical stability
-    # Calculate Absolute Relative Error
-    are = tf.abs((y_true - y_pred) / (y_true + epsilon))
-    return tf.reduce_mean(are)
 
 def create_model():
     # Creating partial functions for each threshold
