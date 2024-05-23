@@ -3,7 +3,7 @@ import os
 
 def fix_refracted_dynamic():
     # Define the directory containing the files
-    directory = "/Users/mohamedgamil/Desktop/Eindhoven/block3/idp/code/t-rex/data/dynamic/refraction"
+    directory = "/Users/mohamedgamil/Desktop/Eindhoven/block3/idp/code/t-rex/data/dynamic/train/refraction"
 
     # Iterate over each file in the directory
     # directory has sub directories
@@ -20,7 +20,7 @@ def fix_refracted_dynamic():
 
 def fix_normal_dynamic():
     # Define the directory containing the files
-    directory = "/Users/mohamedgamil/Desktop/Eindhoven/block3/idp/code/t-rex/data/dynamic/normal"
+    directory = "/Users/mohamedgamil/Desktop/Eindhoven/block3/idp/code/t-rex/data/dynamic/train/normal"
 
     # Iterate over each file in the directory
     for file in os.listdir(directory):
@@ -35,7 +35,7 @@ def fix_normal_dynamic():
 
 def fix_depth_dynamic():
     # Define the directory containing the files
-    directory = "/Users/mohamedgamil/Desktop/Eindhoven/block3/idp/code/t-rex/data/dynamic/depth"
+    directory = "/Users/mohamedgamil/Desktop/Eindhoven/block3/idp/code/t-rex/data/dynamic/train/depth"
 
     # Iterate over each file in the directory
     for file in os.listdir(directory):
@@ -54,7 +54,7 @@ def fix_depth_dynamic():
 # remove the extra .npy from the files
 def remove_npy():
     # Define the directory containing the files
-    directory = "/Users/mohamedgamil/Desktop/Eindhoven/block3/idp/code/t-rex/data/dynamic/depth"
+    directory = "/Users/mohamedgamil/Desktop/Eindhoven/block3/idp/code/t-rex/data/dynamic/train/normal"
 
     # Iterate over each file in the directory
     for file in os.listdir(directory):

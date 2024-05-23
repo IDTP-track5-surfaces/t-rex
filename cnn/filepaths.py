@@ -221,7 +221,7 @@ class Filepaths:
             print(entry)
 
 if __name__ == "__main__":
-    root_dir = '/Users/mohamedgamil/Desktop/Eindhoven/block3/idp/code/t-rex/data/homemade/validation'
+    root_dir = '/Users/mohamedgamil/Desktop/Eindhoven/block3/idp/code/t-rex/data/dynamic/train'
     Filepaths.debug(root_dir)
 
 
