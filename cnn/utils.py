@@ -287,3 +287,35 @@ def absolute_relative_error(y_true, y_pred):
     # Calculate Absolute Relative Error
     are = tf.abs((y_true - y_pred) / (y_true + epsilon))
     return tf.reduce_mean(are)
+
+def plot_inference(infer_refracted, infer_reference, infer_depth, infer_predictions):
+    fig, axes = plt.subplots(3, 4, figsize=(12, 12))
+    for i in range(3):
+        acc_metrics = calculate_metrics(infer_depth[i], infer_predictions[i])
+        acc_125, acc_15625, acc_1953125, rmse, are = acc_metrics
+        metric_str = f"δ1: {acc_125:.3f}, δ2: {acc_15625:.3f}, δ3: {acc_1953125:.3f}\nRMSE: {rmse:.3f}, ARE: {are:.3f}"
+        
+        axes[i, 0].imshow(infer_refracted[i].numpy())
+        axes[i, 0].set_title('Refracted Image')
+        axes[i, 0].axis('off')
+
+        axes[i, 1].imshow(infer_reference[i].numpy())
+        axes[i, 1].set_title('Reference Image')
+        axes[i, 1].axis('off')
+
+        im_pred = axes[i, 2].imshow(infer_predictions[i, :, :, 0], cmap='viridis')
+        axes[i, 2].set_title('Predicted Depth')
+        axes[i, 2].axis('off')
+
+        im_gt = axes[i, 3].imshow(infer_depth[i, :, :, 0], cmap='viridis')
+        axes[i, 3].set_title('Ground Truth Depth')
+        axes[i, 3].axis('off')
+
+        plt.colorbar(im_pred, ax=axes[i, 2])
+        plt.colorbar(im_gt, ax=axes[i, 3])
+        
+        axes[i, 2].annotate(metric_str, xy=(0.5, -0.1), xycoords='axes fraction', ha='center', 
+                                va='top', fontsize=8, color='white', backgroundcolor='black')
+
+    plt.tight_layout()
+    plt.show()
