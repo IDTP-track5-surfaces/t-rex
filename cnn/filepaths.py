@@ -63,7 +63,7 @@ class Filepaths:
         matched_samples = []
         progress_bar = tqdm(total=len(depth_files), desc="Matching files", unit="file")
 
-        allowed_colors = ['checkers', 'gray', 'gray2', 'rocky']
+        # allowed_colors = ['checkers', 'gray', 'gray2', 'rocky']
         for depth_file in depth_files:
             depth_id = self.get_file_id(depth_file)
             for refracted_file in refracted_files:
@@ -73,9 +73,8 @@ class Filepaths:
 
                 if depth_id == refracted_id:
                     reference_file , color = self.get_reference_file(refracted_file, reference_dir)
-                    if color in allowed_colors:
-                        sample = Sample(refracted_file, reference_file, depth_file)
-                        matched_samples.append(sample)
+                    sample = Sample(refracted_file, reference_file, depth_file)
+                    matched_samples.append(sample)
             progress_bar.update(1)
         progress_bar.close()
 
@@ -146,7 +145,7 @@ class Filepaths:
             print(entry)
 
 if __name__ == "__main__":
-    root_dir = '/Users/mohamedgamil/Desktop/Eindhoven/block3/idp/code/t-rex/data/dynamic/validation'
+    root_dir = '/Users/mohamedgamil/Desktop/Eindhoven/block3/idp/code/t-rex/data/pool_homemade/train'
     Filepaths.debug(root_dir)
 
     # root_dir = '/Users/mohamedgamil/Desktop/Eindhoven/block3/idp/code/t-rex/data/homemade'

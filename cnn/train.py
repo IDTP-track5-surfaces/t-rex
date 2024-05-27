@@ -26,8 +26,8 @@ def train_model(model, train_input_tensors, train_depth_tensors, val_input_tenso
 
 ROOT_DIR = '/Users/mohamedgamil/Desktop/Eindhoven/block3/idp/code/t-rex/data/'
 
-TRAIN_DATA = "dynamic"
-VAL_DATA = "homemade"
+TRAIN_DATA = "pool_homemade"
+VAL_DATA = "pool_homemade"
 
 if __name__ == "__main__":
 

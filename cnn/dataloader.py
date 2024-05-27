@@ -5,9 +5,6 @@ from PIL import Image
 from tqdm import tqdm
 from filepaths import Filepaths
 
-REFRACTED_DIR = "/Users/mohamedgamil/Desktop/Eindhoven/block3/idp/code/t-rex/data/data_sets/refraction"
-DEPTH_DIR = "/Users/mohamedgamil/Desktop/Eindhoven/block3/idp/code/t-rex/data/data_sets/depth"
-REFERENCE_DIR = "/Users/mohamedgamil/Desktop/Eindhoven/block3/idp/code/t-rex/data/data_sets/references"
 
 def load_numpy_array(file_path):
     """
@@ -83,7 +80,7 @@ def load_and_preprocess_data(filepaths):
     return input_tensors, depth_tensors
 
 if __name__ == "__main__":
-    root_dir = '/Users/mohamedgamil/Desktop/Eindhoven/block3/idp/code/t-rex/data/dynamic'
+    root_dir = '/Users/mohamedgamil/Desktop/Eindhoven/block3/idp/code/t-rex/data/pool_homemade'
     filepaths = Filepaths(root_dir)
     # Load and preprocess data
     load_and_preprocess_data(filepaths)
