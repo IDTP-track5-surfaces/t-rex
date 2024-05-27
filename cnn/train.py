@@ -1,4 +1,3 @@
-
 import tensorflow as tf
 
 from model import FluidNet, create_model, depth_loss
@@ -28,53 +27,50 @@ def train_model(model, train_input_tensors, train_depth_tensors, val_input_tenso
 ROOT_DIR = '/Users/mohamedgamil/Desktop/Eindhoven/block3/idp/code/t-rex/data/'
 
 TRAIN_DATA = "dynamic"
-# LOAD_MODEL = "dynamic"
 VAL_DATA = "homemade"
 
 if __name__ == "__main__":
 
     with tf.device('/gpu:0'):  # Use '/gpu:0' if TensorFlow-Metal is installed
 
-        # # Model training
+        # Model training
         train_root_dir = ROOT_DIR + TRAIN_DATA + "/train/"
         train_filepaths = Filepaths(train_root_dir)
-        train_input_tensors, train_depth_tensors, train_normal_tensors = load_and_preprocess_data(train_filepaths)
+        train_input_tensors, train_depth_tensors = load_and_preprocess_data(train_filepaths)
         train_depth_tensors = np.expand_dims(train_depth_tensors, axis=-1)
 
         ## Augmenting the data.
         additional_train_root_dir = ROOT_DIR + "homemade/train/"
         additional_train_filepaths = Filepaths(additional_train_root_dir)
-        additional_train_input_tensors, additional_train_depth_tensors, additional_train_normal_tensors = load_and_preprocess_data(additional_train_filepaths)
+        additional_train_input_tensors, additional_train_depth_tensors = load_and_preprocess_data(additional_train_filepaths)
         additional_train_depth_tensors = np.expand_dims(additional_train_depth_tensors, axis=-1)
-        train_input_tensors_augemented = np.concatenate((train_input_tensors, additional_train_input_tensors), axis=0)
+        train_input_tensors_augmented = np.concatenate((train_input_tensors, additional_train_input_tensors), axis=0)
         train_depth_tensors_augmented = np.concatenate((train_depth_tensors, additional_train_depth_tensors), axis=0)
         ####
 
         val_root_dir = ROOT_DIR + VAL_DATA + "/validation/"
         val_filepaths = Filepaths(val_root_dir)
-        val_input_tensors, val_depth_tensors, val_normal_tensors = load_and_preprocess_data(val_filepaths)
+        val_input_tensors, val_depth_tensors = load_and_preprocess_data(val_filepaths)
         val_depth_tensors = np.expand_dims(val_depth_tensors, axis=-1)
 
         model , custom_objects = create_model()
         
-        history = train_model(model, train_input_tensors_augemented, train_depth_tensors_augmented, val_input_tensors, val_depth_tensors, epochs=10, batch_size=32)
+        history = train_model(model, train_input_tensors_augmented, train_depth_tensors_augmented, val_input_tensors, val_depth_tensors, epochs=10, batch_size=32)
         plot_metrics(history)
         model.save('fluid_net_both' + '.h5')
-
 
         # Pick 3 random indices from the validation dataset
         random_indices = np.random.choice(val_input_tensors.shape[0], 3, replace=False)
         
-        # # Use tf.gather to select random indices for tensors
+        # Use tf.gather to select random indices for tensors
         infer_input = tf.gather(val_input_tensors, random_indices)
         infer_depth = tf.gather(val_depth_tensors, random_indices)
 
-        # # Inference test
-        # loaded_model = tf.keras.models.load_model('fluid_net_'+ LOAD_MODEL + '.h5', custom_objects=custom_objects)
+        # Inference test
         loaded_model = model
         infer_predictions = loaded_model.predict(infer_input)
 
-        # # Use tf.gather for refracted and reference tensors, assuming they are part of input_tensors and follow channels
+        # Use tf.gather for refracted and reference tensors, assuming they are part of input_tensors and follow channels
         infer_refracted = tf.gather(val_input_tensors[:, :, :, :3], random_indices) # Adjust for grayscale images
         infer_reference = tf.gather(val_input_tensors[:, :, :, 3:], random_indices) # Adjust for grayscale images
 
@@ -109,6 +105,3 @@ if __name__ == "__main__":
 
         plt.tight_layout()
         plt.show()
-
-
-
