@@ -31,18 +31,22 @@ def preprocess_data(matched_samples):
     refracted_tensors = []
     reference_tensors = []
     depth_tensors = []
+    normal_tensors = []
 
     progress_bar = tqdm(total=len(matched_samples), desc="Preprocessing data", unit="sample")
     for sample in matched_samples:
         refracted_tensor = load_image_as_tensor(sample.refracted)
         reference_tensor = load_image_as_tensor(sample.reference)
         depth_tensor = tf.convert_to_tensor(load_numpy_array(sample.depth_file), dtype=tf.float32)
-        # Optionally, resize depth maps to match input size
+        normal_tensor = tf.convert_to_tensor(load_numpy_array(sample.normal_file), dtype=tf.float32)
+        # # Optionally, resize depth and normal maps to match input size
         depth_tensor = tf.image.resize(depth_tensor[None, :, :, None], (128, 128))[0, :, :, 0]
+        normal_tensor = tf.image.resize(normal_tensor[None, :, :, :], (128, 128))[0, :, :, :]
 
         refracted_tensors.append(refracted_tensor)
         reference_tensors.append(reference_tensor)
         depth_tensors.append(depth_tensor)
+        normal_tensors.append(normal_tensor)
 
         progress_bar.update(1)
 
@@ -52,6 +56,7 @@ def preprocess_data(matched_samples):
     refracted_tensors = tf.stack(refracted_tensors)
     reference_tensors = tf.stack(reference_tensors)
     depth_tensors = tf.stack(depth_tensors)
+    normal_tensors = tf.stack(normal_tensors)
 
     # Normalize depth tensors
     max_depth_per_sample = tf.reduce_max(depth_tensors, axis=[1, 2], keepdims=True)
@@ -63,7 +68,7 @@ def preprocess_data(matched_samples):
     # Combine refracted and reference tensors along the channel dimension to match the model's expected input
     input_tensors = tf.concat([refracted_tensors, reference_tensors], axis=-1)
 
-    return input_tensors, depth_tensors
+    return input_tensors, depth_tensors, normal_tensors
 
 def load_and_preprocess_data(filepaths):
     """
@@ -73,11 +78,12 @@ def load_and_preprocess_data(filepaths):
     matched_samples = filepaths.match_samples()
     print("Number of matched samples: ", len(matched_samples))
 
-    input_tensors, depth_tensors = preprocess_data(matched_samples)
+    input_tensors, depth_tensors, normal_tensors = preprocess_data(matched_samples)
     print("Input tensors shape: ", input_tensors.shape)
     print("Depth tensors shape: ", depth_tensors.shape)
+    print("Normal tensors shape: ", normal_tensors.shape)
 
-    return input_tensors, depth_tensors
+    return input_tensors, depth_tensors, normal_tensors
 
 if __name__ == "__main__":
     root_dir = '/Users/mohamedgamil/Desktop/Eindhoven/block3/idp/code/t-rex/data/pool_homemade'
