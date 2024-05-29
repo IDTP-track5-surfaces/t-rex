@@ -47,7 +47,7 @@ if __name__ == "__main__":
         print("Preparing validation data...")
         val_root_dir = ROOT_DIR + VAL_DATA + "/validation/" 
         val_filepaths = Filepaths(val_root_dir)
-        val_input_tensors, val_depth_tensors = load_and_preprocess_data(val_filepaths)
+        val_input_tensors, val_depth_tensors , val_normal_tensors = load_and_preprocess_data(val_filepaths)
         val_depth_tensors = np.expand_dims(val_depth_tensors, axis=-1)
 
         model, custom_objects = create_model()
@@ -56,7 +56,7 @@ if __name__ == "__main__":
             print("Preparing training data...")
             train_root_dir = ROOT_DIR + TRAIN_DATA + "/train/"
             train_filepaths = Filepaths(train_root_dir)
-            train_input_tensors, train_depth_tensors = load_and_preprocess_data(train_filepaths)
+            train_input_tensors, train_depth_tensors, val_normal_tensors = load_and_preprocess_data(train_filepaths)
             train_depth_tensors = np.expand_dims(train_depth_tensors, axis=-1)
 
             if args.augment != '':

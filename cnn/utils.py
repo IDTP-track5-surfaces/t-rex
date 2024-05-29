@@ -11,6 +11,8 @@ import tensorflow.keras.backend as K
 
 import os
 import shutil
+import numpy as np
+from scipy.interpolate import griddata
 
 import matplotlib.pyplot as plt
 # Keras losses
@@ -319,3 +321,33 @@ def plot_inference(infer_refracted, infer_reference, infer_depth, infer_predicti
 
     plt.tight_layout()
     plt.show()
+    
+def exp_f(x,a,b,c):
+    return a*np.exp(-(x/b)) + c;
+ 
+def pol2_f(x,a,b,c):
+    return a*x + b*x**2 + c;
+ 
+def Puff_profile(x, y, ta, depth = -0.00326456, dx=0, dy=0, width=1):
+    # evaluation of surface deformation extracted from EXP_ID=142
+    upper = exp_f(ta,-6.17761515e-05,  1.78422769e+00,  7.40139158e-05)
+    lower = exp_f(ta,0.00377156,  1.45234773, depth)
+    a     = pol2_f(ta,0.31294945, -0.00963803,  2.6743828)
+    b     = pol2_f(ta,38.56906702,  -1.6278976 , 453.87937763)
+    r = np.sqrt((x-dx)**2 + (y-dy)**2)/width
+    
+    # scaled logistic function describing surface deformation
+    return lower + (upper - lower) / (1 + np.exp(a - b * r))
+
+def grad_puff_profile(x, y, ta, depth = -0.00326456, dx=0, dy=0, width=1):
+    upper = exp_f(ta,-6.17761515e-05,  1.78422769e+00,  7.40139158e-05)
+    lower = exp_f(ta,0.00377156,  1.45234773, depth)
+    a     = pol2_f(ta,0.31294945, -0.00963803,  2.6743828)
+    b     = pol2_f(ta,38.56906702,  -1.6278976 , 453.87937763)
+    
+    r = np.sqrt((x-dx)**2 + (y-dy)**2)/width
+    d = b * np.exp(a - b * r)*(upper - lower) / (1 + np.exp(a - b * r))/r
+    dx = d * x
+    dy = d * y
+    return (dx, dy)
+

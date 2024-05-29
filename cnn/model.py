@@ -26,19 +26,6 @@ def depth_loss(y_true, y_pred):
     # Combine losses
     return l2_loss - scale_invariant_loss + gradient_loss
 
-# def scale_loss(true_ranges, predicted_ranges):
-#     # Calculate the L2-norm difference between the true and predicted ranges
-#     range_diff = tf.square(true_ranges - predicted_ranges)
-#     return tf.reduce_mean(range_diff)
-
-# def combined_loss(y_true, y_pred, true_ranges, predicted_ranges):
-#     depth_l = depth_loss(y_true, y_pred)
-#     scale_l = scale_loss(true_ranges, predicted_ranges)
-    
-#     # Combine the two losses with equal weighting
-#     final_loss = 0.5 * depth_l + 0.5 * scale_l
-#     return final_loss
-
 
 def FluidNet(nClasses = 1, nClasses1=3, input_height=128, input_width=128):
     assert input_height % 32 == 0
