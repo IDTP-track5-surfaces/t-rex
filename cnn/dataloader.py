@@ -22,12 +22,31 @@ def load_image_as_tensor(image_path, image_size=(128, 128)):
     image = tf.cast(image, tf.float32) / 255.0  # Normalize to [0, 1]
     return image
 
-def preprocess_data(matched_samples):
+def create_scale_data(depth_data, normal_data):
     """
-    Extending the function to load and preprocess data.
-    """
+    Create scale data for depth and normal maps.
 
-    # Convert matched samples into TensorFlow dataset
+    Args:
+    - depth_data: Tensor of shape [batch_size, height, width, 1] - Depth map.
+    - normal_data: Tensor of shape [batch_size, height, width, 3] - Normal map.
+
+    Returns:
+    - scale_data: Tensor of shape [batch_size, 1, 1, 4] - Contains min and max values for depth and normals.
+    """
+    # Calculate min and max for depth
+    depth_min = tf.reduce_min(depth_data, axis=[1, 2], keepdims=True)
+    depth_max = tf.reduce_max(depth_data, axis=[1, 2], keepdims=True)
+
+    # Calculate min and max for normals
+    normal_min = tf.reduce_min(normal_data, axis=[1, 2], keepdims=True)
+    normal_max = tf.reduce_max(normal_data, axis=[1, 2], keepdims=True)
+
+    # Concatenate min and max values for depth and normals
+    scale_data = tf.concat([depth_min, depth_max, normal_min, normal_max], axis=-1)  # Shape: [batch_size, 1, 1, 4]
+
+    return scale_data
+
+def preprocess_data(matched_samples):
     refracted_tensors = []
     reference_tensors = []
     depth_tensors = []
@@ -39,9 +58,9 @@ def preprocess_data(matched_samples):
         reference_tensor = load_image_as_tensor(sample.reference)
         depth_tensor = tf.convert_to_tensor(load_numpy_array(sample.depth_file), dtype=tf.float32)
         normal_tensor = tf.convert_to_tensor(load_numpy_array(sample.normal_file), dtype=tf.float32)
-        # # Optionally, resize depth and normal maps to match input size
-        depth_tensor = tf.image.resize(depth_tensor[None, :, :, None], (128, 128))[0, :, :, 0]
-        normal_tensor = tf.image.resize(normal_tensor[None, :, :, :], (128, 128))[0, :, :, :]
+
+        depth_tensor = tf.image.resize(depth_tensor[None, :, :, None], (128, 128))[0]
+        normal_tensor = tf.image.resize(normal_tensor[None, :, :, :], (128, 128))[0]
 
         refracted_tensors.append(refracted_tensor)
         reference_tensors.append(reference_tensor)
@@ -49,26 +68,38 @@ def preprocess_data(matched_samples):
         normal_tensors.append(normal_tensor)
 
         progress_bar.update(1)
-
     progress_bar.close()
 
-    # Stack tensors to create a batch dimension
     refracted_tensors = tf.stack(refracted_tensors)
     reference_tensors = tf.stack(reference_tensors)
     depth_tensors = tf.stack(depth_tensors)
     normal_tensors = tf.stack(normal_tensors)
 
-    # Normalize depth tensors
-    max_depth_per_sample = tf.reduce_max(depth_tensors, axis=[1, 2], keepdims=True)
-    depth_tensors = depth_tensors / max_depth_per_sample
-    
-    print("Refracted tensors shape: ", refracted_tensors.shape)
-    print("Reference tensors shape: ", reference_tensors.shape)
+    # Debugging depth tensor values
+    print("Depth tensor sample (post-resize):", depth_tensors[0, :5, :5, 0])
 
-    # Combine refracted and reference tensors along the channel dimension to match the model's expected input
+    max_depth_per_sample = tf.reduce_max(depth_tensors, axis=[1, 2], keepdims=True)
+    normalized_depth_tensors = depth_tensors / max_depth_per_sample
+
+    # Debug normalized depth tensor values
+    print("Normalized Depth Tensors sample:", normalized_depth_tensors[0, :5, :5, 0])
+
     input_tensors = tf.concat([refracted_tensors, reference_tensors], axis=-1)
 
-    return input_tensors, depth_tensors, normal_tensors
+    depth_min = tf.reduce_min(normalized_depth_tensors, axis=[1, 2], keepdims=True)
+    depth_max = tf.reduce_max(normalized_depth_tensors, axis=[1, 2], keepdims=True)
+
+    normal_min = tf.reduce_min(normal_tensors, axis=[1, 2], keepdims=True)
+    normal_max = tf.reduce_max(normal_tensors, axis=[1, 2], keepdims=True)
+
+    scale_data = tf.concat([depth_min, depth_max, normal_min, normal_max], axis=-1)
+    scale_data = tf.tile(scale_data, [1, 128, 128, 1])
+
+    output_tensors = tf.concat([normalized_depth_tensors, normal_tensors, refracted_tensors, reference_tensors, scale_data], axis=-1)
+
+    return input_tensors, output_tensors
+
+
 
 def load_and_preprocess_data(filepaths):
     """
@@ -78,15 +109,14 @@ def load_and_preprocess_data(filepaths):
     matched_samples = filepaths.match_samples()
     print("Number of matched samples: ", len(matched_samples))
 
-    input_tensors, depth_tensors, normal_tensors = preprocess_data(matched_samples)
+    input_tensors, output_tensors = preprocess_data(matched_samples)
     print("Input tensors shape: ", input_tensors.shape)
-    print("Depth tensors shape: ", depth_tensors.shape)
-    print("Normal tensors shape: ", normal_tensors.shape)
+    print("Output tensors shape: ", output_tensors.shape)
 
-    return input_tensors, depth_tensors, normal_tensors
+    return input_tensors, output_tensors
 
 if __name__ == "__main__":
-    root_dir = '/Users/mohamedgamil/Desktop/Eindhoven/block3/idp/code/t-rex/data/pool_homemade'
+    root_dir = '/Users/mohamedgamil/Desktop/Eindhoven/block3/idp/code/t-rex/data/pool_homemade/train'
     filepaths = Filepaths(root_dir)
     # Load and preprocess data
     load_and_preprocess_data(filepaths)

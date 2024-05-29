@@ -47,8 +47,7 @@ if __name__ == "__main__":
         print("Preparing validation data...")
         val_root_dir = ROOT_DIR + VAL_DATA + "/validation/" 
         val_filepaths = Filepaths(val_root_dir)
-        val_input_tensors, val_depth_tensors , val_normal_tensors = load_and_preprocess_data(val_filepaths)
-        val_depth_tensors = np.expand_dims(val_depth_tensors, axis=-1)
+        val_input_tensors, val_output_tensors = load_and_preprocess_data(val_filepaths)
 
         model, custom_objects = create_model()
         if args.train_data != '':
@@ -56,19 +55,18 @@ if __name__ == "__main__":
             print("Preparing training data...")
             train_root_dir = ROOT_DIR + TRAIN_DATA + "/train/"
             train_filepaths = Filepaths(train_root_dir)
-            train_input_tensors, train_depth_tensors, val_normal_tensors = load_and_preprocess_data(train_filepaths)
-            train_depth_tensors = np.expand_dims(train_depth_tensors, axis=-1)
+            train_input_tensors, train_output_tensors = load_and_preprocess_data(train_filepaths)
+
 
             if args.augment != '':
                 print("Augmenting the data...")
                 additional_train_root_dir = ROOT_DIR + AUGMENT + "/train/"
                 additional_train_filepaths = Filepaths(additional_train_root_dir)
-                additional_train_input_tensors, additional_train_depth_tensors = load_and_preprocess_data(additional_train_filepaths)
-                additional_train_depth_tensors = np.expand_dims(additional_train_depth_tensors, axis=-1)
+                additional_train_input_tensors, additional_train_output_tensors = load_and_preprocess_data(additional_train_filepaths)
                 train_input_tensors = np.concatenate([train_input_tensors, additional_train_input_tensors], axis=0)
-                train_depth_tensors = np.concatenate([train_depth_tensors, additional_train_depth_tensors], axis=0)
+                train_output_tensors = np.concatenate([train_output_tensors, additional_train_output_tensors], axis=0)
 
-            history = train_model(model, train_input_tensors, train_depth_tensors, val_input_tensors, val_depth_tensors, epochs=EPOCHS, batch_size=BATCH_SIZE)
+            history = train_model(model, train_input_tensors, train_output_tensors, val_input_tensors, val_output_tensors, epochs=EPOCHS, batch_size=BATCH_SIZE)
             plot_metrics(history)
             model.save('fluid_net_big' + TRAIN_DATA + AUGMENT + '.h5')
 
@@ -81,10 +79,10 @@ if __name__ == "__main__":
 
                 # Pick 3 random indices from the validation dataset
                 random_indices = np.random.choice(val_input_tensors.shape[0], 3, replace=False)
-                
+                print("Random indices: ", random_indices)
                 # Use tf.gather to select random indices for tensors
                 infer_input = tf.gather(val_input_tensors, random_indices)
-                infer_depth = tf.gather(val_depth_tensors, random_indices)
+                infer_depth = tf.gather(val_output_tensors, random_indices)
 
                 # Inference test
                 infer_predictions = loaded_model.predict(infer_input)

@@ -1,13 +1,42 @@
-from keras.models import Model
-from keras.layers import Conv2D, MaxPooling2D, Conv2DTranspose, concatenate, Input, Activation
-from keras.optimizers import Adam
-from functools import partial
-import keras.backend as K
+from __future__ import print_function
 
+import matplotlib.pyplot as plt
+import PIL
 import tensorflow as tf
-import tensorflow_addons as tfa
-from utils import threshold_accuracy, absolute_relative_error
+import numpy as np
+import cv2, os
+import seaborn as sns
+import pandas as pd 
+import warnings
+from scipy.misc import toimage, imsave
+import glob
+import gc
+from sklearn.utils import shuffle
+from scipy.linalg import norm
+from scipy import sum, average
+from scipy.interpolate import RectBivariateSpline
 
+from tensorflow.python.keras.applications.vgg16 import VGG16
+from tensorflow.python.keras.applications.vgg16 import preprocess_input, decode_predictions
+from tensorflow.python.keras.preprocessing.image import ImageDataGenerator
+import keras, sys, time
+from tensorflow.python.keras.models import *
+from tensorflow.python.keras.layers import *
+from tensorflow.python.keras.optimizers import Adam
+# from keras.callbacks import TensorBoard, ModelCheckpoint
+from tensorflow.keras.callbacks import TensorBoard
+# from keras.callbacks import EarlyStopping
+from tensorflow.keras.callbacks import ModelCheckpoint
+from tensorflow.keras.callbacks import EarlyStopping
+from keras.utils import plot_model
+
+from our_train_D2N_raytrace_datagen import DataGenerator
+#list visible devices
+from tensorflow.python.client import device_lib
+
+TRAIN_NUM = 30600
+VAL_NUM = 5400
+BATCH_SIZE = 32
 
 #create network
 def FluidNet( nClasses, nClasses1 ,  input_height=128, input_width=128):
@@ -67,7 +96,7 @@ def FluidNet( nClasses, nClasses1 ,  input_height=128, input_width=128):
     #concatinate x and f1 for 5th Deconv layer
     
     x = concatenate ([x, f1],axis = 3)    
-    x = (Conv2DTranspose( nClasses + nClasses1 + 7  , kernel_size=(3,3) ,  strides=(2,2) , padding='same',dilation_rate = (1,1), use_bias=False, data_format=IMAGE_ORDERING, name="Transpose_pool1" )(x))
+    x = (Conv2DTranspose( nClasses + nClasses1 , kernel_size=(3,3) ,  strides=(2,2) , padding='same',dilation_rate = (1,1), use_bias=False, data_format=IMAGE_ORDERING, name="Transpose_pool1" )(x))
     
     o = x
     o = (Activation('sigmoid', name="depth_out"))(o)
@@ -103,6 +132,11 @@ def FluidNet( nClasses, nClasses1 ,  input_height=128, input_width=128):
        
     return model
 
+# Keras losses
+def mean_squared_error(y_true, y_pred):
+    return K.mean(K.square(y_pred - y_true), axis=-1)
+
+# Custom loss
 def depth_loss (y_true, y_pred): 
     d = tf.subtract(y_pred,y_true)
     n_pixels = 128 * 128
@@ -136,9 +170,6 @@ def depth_loss (y_true, y_pred):
     return depth_output
 
 def normal_loss(y_true, y_pred):
-    assert y_pred.shape[-1] == 3 and y_true.shape[-1] == 3, "Input tensors must have three channels."
-
-
     d = tf.subtract(y_pred,y_true)
     n_pixels = 128 * 128
     square_n_pixels = n_pixels * n_pixels
@@ -147,110 +178,38 @@ def normal_loss(y_true, y_pred):
     sum_d = tf.reduce_sum(d,1)
     square_sum_d = tf.square(sum_d)
     normal_output = tf.reduce_mean((sum_square_d/n_pixels) - 0.5* (square_sum_d/square_n_pixels))
-    return normal_output 
+    return normal_output
 
-
-def depth_to_normal(y_pred_depth, y_true_normal, scale_pred, scale_true):
-
+def depth_to_normal(y_pred_depth,y_true_normal, scale_pred,scale_true):
     Scale = 127.5
-    epsilon = 1e-6
 
-    # Normalize y_true_normal
-    y_true_normal = scale_true[:, :, :, 0:1] + (scale_true[:, :, :, 1:2] - scale_true[:, :, :, 0:1]) * y_true_normal
-
-    # Applying Laplacian filter to enhance edges
-    laplacian_filter = tf.constant([[0, 1, 0], [1, -4, 1], [0, 1, 0]], dtype=tf.float32, shape=[3, 3, 1, 1])
-    laplacian_depth = tf.nn.conv2d(y_pred_depth, laplacian_filter, strides=[1, 1, 1, 1], padding='SAME')
-
-    # Calculate gradients from laplacian enhanced depth
-    zy, zx = tf.image.image_gradients(laplacian_depth)
-    zx *= Scale
-    zy *= Scale
-
-    # Create normal vectors
-    normal_ori = tf.concat([-zx, -zy, tf.ones_like(y_pred_depth)], axis=-1)
-    normal = normal_ori / (tf.linalg.norm(normal_ori, axis=-1, keepdims=True) + epsilon)
-    normal = (normal + 1) / 2  # Normalize the output
-
-    return normal, y_true_normal
-
-
-
-
-
-def snell_refraction(normal,s1,n1,n2):
-    this_normal = normal
-    term_1 = tf.linalg.cross(this_normal,tf.linalg.cross(-this_normal,s1))
-    term_temp = tf.linalg.cross(this_normal,s1)   
-    n_sq = (n1/n2)**2
-    term_2 = tf.sqrt(tf.subtract(1.0,tf.multiply(n_sq,tf.reduce_sum(tf.multiply(term_temp,term_temp),axis = 3))))   
-    term_3 = tf.stack([term_2, term_2, term_2],axis = 3)   
-    nn = (n1/n2)
-    s2 = tf.subtract(tf.multiply(nn,term_1) , tf.multiply(this_normal,term_3))
-    return s2   
-
-def raytracing_loss(depth, normal, background, scale):
-    step = 255 / 2
-    n1 = 1
-    n2 = 1.33
-
-    depth_min = scale[:, 0:1, 0:1, 0:1]
-    depth_max = scale[:, 0:1, 0:1, 1:2]
-    normal_min = scale[:, 0:1, 0:1, 2:3]
-    normal_max = scale[:, 0:1, 0:1, 3:4]
-
-    # Tile the min and max tensors to match the dimensions of the normal tensor
-    normal_min = tf.tile(normal_min, [1, 128, 128, 1])
-    normal_max = tf.tile(normal_max, [1, 128, 128, 1])
-
-    depth = depth_min + (depth_max - depth_min) * depth
-    normal = normal_min + (normal_max - normal_min) * normal
-
-    depth = tf.squeeze(depth, axis=-1)  # Remove the last dimension if single-channel
-
-    # Construct the initial direction vector for Snell's refraction
-    s1 = tf.zeros_like(depth)
-    s11 = -1 * tf.ones_like(depth)
-    assigned_s1 = tf.stack([s1, s1, s11], axis=3)
-
-    s2 = snell_refraction(normal, assigned_s1, n1, n2)
-
-    x_c_ori, y_c_ori, lamda_ori = tf.split(s2, [1, 1, 1], axis=3)
-    lamda = -1 * tf.divide(depth, tf.squeeze(lamda_ori))
-
-    x_c = tf.multiply(lamda, tf.squeeze(x_c_ori)) * step
-    y_c = tf.multiply(lamda, tf.squeeze(y_c_ori)) * step
-
-    flow = tf.stack([y_c, -x_c], axis=-1)
-
-    # Use TensorFlow's built-in function for image warping given the flow field
-    out_im_tensor = tfa.image.dense_image_warp(background, flow)
-    # Ensure the output has the same number of channels as the input background
-    if out_im_tensor.shape[-1] != background.shape[-1]:
-        out_im_tensor = out_im_tensor[..., :background.shape[-1]]  # Adjust channels by slicing if necessary
-
-    return out_im_tensor
-
-def mean_squared_error(y_true, y_pred):
-    return K.mean(K.square(y_pred - y_true), axis=-1)
-
-def vae_loss(y_true, y_pred):
-    # Ensure both tensors have the same last dimension size
-    if len(y_pred.shape) == 4 and y_pred.shape[-1] != y_true.shape[-1]:
-        y_pred = tf.squeeze(y_pred, axis=-1)  # Assuming y_pred has an unnecessary extra dimension
+    depth_min = scale_pred[:,0:1,0:1]
+    depth_max = scale_pred[:,0:1,1:2]
     
-    # Calculate MSE
-    loss1 = tf.reduce_mean(tf.square(y_true - y_pred), axis=[1, 2])
-    
-    # Binary Cross-Entropy
-    if len(y_true.shape) == 3:  # If y_true is missing the channel dimension
-        y_true = tf.expand_dims(y_true, -1)
-        y_pred = tf.expand_dims(y_pred, -1)
-    loss2 = tf.reduce_mean(tf.keras.losses.binary_crossentropy(y_true, y_pred, from_logits=False), axis=[1, 2])
+    normal_min = scale_true[:,0:1,2:3]  
+    normal_max = scale_true[:,0:1,3:4]
 
-    # Combine losses
+    y_pred_depth = depth_min + (depth_max - depth_min) * y_pred_depth
+    y_true_normal = normal_min + (normal_max - normal_min) * y_true_normal
+    
+    zy, zx = tf.image.image_gradients(y_pred_depth)
+    
+    zx = zx*Scale
+    zy = zy*Scale
+    
+    normal_ori = tf.concat([zy, -zx, tf.ones_like(y_pred_depth)], 3) 
+    new_normal = tf.sqrt(tf.square(zx) +  tf.square(zy) + 1)
+    normal = normal_ori/new_normal
+   
+    normal += 1
+    normal /= 2
+        
+    return normal,y_true_normal
+
+def vae_loss( y_true, y_pred):
+    loss1 = mean_squared_error(y_true, y_pred)
+    loss2 = binary_crossentropy(y_true, y_pred)
     return tf.reduce_mean(loss1 + loss2)
-
 
 def scale_loss(y_true,y_pred):
     pred_depth_min = y_pred[:,0:1,0:1]
@@ -270,11 +229,66 @@ def scale_loss(y_true,y_pred):
 
     return tf.reduce_mean(loss_depth_min + loss_depth_max + loss_normal_min + loss_normal_max)
 
+def snell_refraction(normal,s1,n1,n2):
+    this_normal = normal
+    term_1 = tf.cross(this_normal,tf.cross(-this_normal,s1))
+    term_temp = tf.cross(this_normal,s1)   
+    n_sq = (n1/n2)**2
+    term_2 = tf.sqrt(tf.subtract(1.0,tf.multiply(n_sq,tf.reduce_sum(tf.multiply(term_temp,term_temp),axis = 3))))   
+    term_3 = tf.stack([term_2, term_2, term_2],axis = 3)   
+    nn = (n1/n2)
+    s2 = tf.subtract(tf.multiply(nn,term_1) , tf.multiply(this_normal,term_3))
+    return s2    
 
+def raytracing_loss(depth,normal,background,scale): 
+    step = 255/2
+    n1 = 1;
+    n2 = 1.33;
+      
+    depth_min = scale[:,0:1,0:1]
+    depth_max = scale[:,0:1,1:2]
+    normal_min = scale[:,0:1,2:3]  
+    normal_max = scale[:,0:1,3:4]
+
+    depth = depth_min + (depth_max - depth_min) * depth
+    normal = normal_min + (normal_max - normal_min) * normal
+
+    depth = tf.squeeze(depth, axis = -1)
+
+    s1 = tf.Variable(0.0,name="s1")
+    s1_temp = tf.zeros([K.shape(depth)[0],128,128,1])
+    s1 = tf.assign(s1,s1_temp, validate_shape=False)
+            
+    s11 = tf.Variable(0.0,name="s11")
+    s11_temp = -1*tf.ones([K.shape(depth)[0],128,128,1])
+    s11 = tf.assign(s11,s11_temp, validate_shape=False)
+
+    assigned_s1 = tf.stack([s1,s1,s11],axis = 3)
+    assigned_s1 = tf.squeeze(assigned_s1)
+
+    s2 = snell_refraction(normal,assigned_s1,n1,n2) 
+
+    x_c_ori, y_c_ori, lamda_ori = tf.split(s2,[1,1,1],axis = 3)
+
+    lamda = -1*tf.divide(depth,tf.squeeze(lamda_ori))
+    
+    x_c = tf.multiply(lamda , tf.squeeze(x_c_ori))*step
+    y_c = tf.multiply(lamda , tf.squeeze(y_c_ori))*step   
+
+    flow = tf.stack([y_c,-x_c],axis = -1)
+
+    out_im_temp = tf.contrib.image.dense_image_warp(
+                    background,
+                    flow,
+                    name='dense_image_warp'
+                    )
+
+    out_im_tensor = tf.Variable(0.0)
+
+    out_im_tensor = tf.assign(out_im_tensor, out_im_temp, validate_shape=False)
+    return out_im_tensor
 
 def combined_loss(y_true,y_pred):
-    print("y_true shape:", y_true.shape)
-    print("y_pred shape:", y_pred.shape)
     #print(K.int_shape(y_true)[0],K.shape(y_pred))
 
     depth_true = y_true[:,:,:,0]
@@ -285,6 +299,8 @@ def combined_loss(y_true,y_pred):
 
     depth_pred = y_pred[:,:,:,0]
     normal_pred = y_pred[:,:,:,1:4]
+    img_pred = y_pred[:,:,:,4:7]
+    ref_pred = y_pred[:,:,:,7:10]
     scale_pred = y_pred[:,:,:,10:]
 
     depth_true = tf.expand_dims(depth_true, -1)
@@ -309,60 +325,102 @@ def combined_loss(y_true,y_pred):
     loss_depth_to_normal = gamma*(normal_loss(rescaled_true_normal,normal_from_depth)) 
 
     #ray_tracing
-    # ray_traced_tensor= raytracing_loss(depth_pred,normal_pred,ref_true,scale_true)
-    # loss_ray_trace = delta * vae_loss(img_true,ray_traced_tensor)
+    ray_traced_tensor= raytracing_loss(depth_pred,normal_pred,ref_true,scale_true)
+    loss_ray_trace = delta * vae_loss(img_true,ray_traced_tensor)
 
     #scale_loss
     loss_scale = theta * scale_loss(scale_true,scale_pred)
 
-    # return (loss_depth + loss_normal + loss_depth_to_normal + loss_ray_trace + loss_scale)
-    return (loss_depth + loss_normal + loss_depth_to_normal + loss_scale)
+    #reference_loss
+    loss_reference = tau * vae_loss(ref_true,ref_pred)
 
-def create_model():
-    # Creating partial functions for each threshold
-    accuracy_125 = partial(threshold_accuracy, threshold=1.25)
-    accuracy_125.__name__ = 'accuracy_125'
+    #input image loss
+    loss_in_img = lamda * vae_loss(img_true,img_pred)
 
-    accuracy_15625 = partial(threshold_accuracy, threshold=1.25**2)
-    accuracy_15625.__name__ = 'accuracy_15625'
+    return (loss_depth + loss_normal + loss_depth_to_normal + loss_ray_trace + loss_scale + loss_reference + loss_in_img)
 
-    accuracy_1953125 = partial(threshold_accuracy, threshold=1.25**3)
-    accuracy_1953125.__name__ = 'accuracy_1953125'
+# TRAIN
+with tf.device("/gpu:0"):
+
+    model = FluidNet(nClasses = 1,
+             nClasses1 = 3,  
+             input_height = 128, 
+             input_width  = 128)
+    model.summary()
+    
+    # Load the preprocessed data 
+    gc.collect()
+    X_train = np.load(dir_references+"X_train{}.npy".format(TRAIN_NUM))
+    X_train = np.array(X_train)
+    print(X_train.shape)
+    y_train = np.load(dir_references+"Y_train{}.npy".format(TRAIN_NUM))
+    y_train = np.array(y_train)   
+    print(y_train.shape)
+
+    X_test = np.load(dir_references+"X_val{}.npy".format(VAL_NUM))
+    X_test = np.array(X_test)
+    print(X_test.shape)
+    y_test = np.load(dir_references+"Y_val{}.npy".format(VAL_NUM))
+    y_test = np.array(y_test)   
+    print(y_test.shape)
+
+    #create model and train
+    training_log = TensorBoard(log_folder)
+    weight_filename = weight_folder + "pretrained_FSRN_CNN.h5"
+
+    stopping = EarlyStopping(monitor='val_loss', patience=2)
+
+    checkpoint = ModelCheckpoint(weight_filename,
+                                 monitor = "val_loss",
+                                 save_best_only = True,
+                                 save_weights_only = True)
+    #Plot loss
+    dir_plot = "plot/" 
+    
+    model = FluidNet(nClasses     = 1,
+             nClasses1 = 3,  
+             input_height = 128, 
+             input_width  = 128)
+    
+    model.summary()
+    plot_model(model,to_file=dir_plot+'model.png',show_shapes=True)
+    
+    epochs = 35
+    learning_rate = 0.001
+    batch_size = BATCH_SIZE
 
     loss_funcs = {
         "single_out": combined_loss,
     }
     loss_weights = {"single_out": 1.0}
 
+    
+    print('lr:{},epoch:{},batch_size:{}'.format(learning_rate,epochs,batch_size))
+    
+    adam = Adam(lr=learning_rate)
+    model.compile(loss= loss_funcs,
+              optimizer=adam,
+              loss_weights=loss_weights,
+              metrics=["accuracy"])  
+    gc.collect()
+    
+    history = model.fit(X_train,y_train,
+                    batch_size=batch_size,
+                    epochs=epochs,
+                    verbose=2, 
+                    validation_data=(X_test,y_test),
+                    callbacks = [training_log,checkpoint])
+    
+    fig = plt.figure(figsize=(10,20)) 
 
-    model = FluidNet(nClasses=1, nClasses1 = 3)  # Adjust the number of classes if necessary
-    model.compile(
-        optimizer='adam', 
-        loss=loss_funcs, 
-        loss_weights=loss_weights,
-        metrics=[
-            tf.keras.metrics.RootMeanSquaredError(), 
-            absolute_relative_error,
-            accuracy_125,
-            accuracy_15625,
-            accuracy_1953125
-        ]
-    )
-    model.summary()
+    ax = fig.add_subplot(1,2,1)
+    for key in ['loss', 'val_loss']:
+        ax.plot(history.history[key],label=key)
+    ax.legend()
 
-    custom_objects = {
-    'accuracy_125': accuracy_125,
-    'accuracy_15625': accuracy_15625,
-    'accuracy_1953125': accuracy_1953125,
-    'combined_loss': combined_loss, 
-    'absolute_relative_error': absolute_relative_error
-}
-
-    return model , custom_objects
-
-
-if __name__ == "__main__":
-
-    model = create_model()
-
-        
+    ax = fig.add_subplot(1,2,2)
+    for key in ['acc', 'val_acc']:
+        ax.plot(history.history[key],label=key)
+    ax.legend()
+    fig.savefig(dir_plot+"Loss_"+str(epochs)+".png")   # save the figure to file
+    plt.close(fig)
