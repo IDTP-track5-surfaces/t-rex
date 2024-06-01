@@ -10,98 +10,52 @@ from utils import threshold_accuracy, absolute_relative_error
 
 
 #create network
-def FluidNet( nClasses, nClasses1 ,  input_height=128, input_width=128):
-    assert input_height%32 == 0
-    assert input_width%32 == 0
-    IMAGE_ORDERING =  "channels_last" 
 
-    img_input = Input(shape=(input_height,input_width, 6), name='combined_input') ## Assume 128,128,6
-    
-    ## Block 1 128x128
-    x = Conv2D(18, (2, 2), activation='relu', padding='same', name='block1_conv1', data_format=IMAGE_ORDERING )(img_input)
-    x = Conv2D(18, (2, 2), activation='relu', padding='same', name='block1_conv2', data_format=IMAGE_ORDERING )(x)
-    x = MaxPooling2D((2, 2), strides=(2, 2), name='block1_pool', data_format=IMAGE_ORDERING )(x)
-    f1 = x
-    
-    # Block 2 64x64
-    x = Conv2D(36, (2, 2), activation='relu', padding='same', name='block2_conv1', data_format=IMAGE_ORDERING )(x)
-    x = Conv2D(36, (2, 2), activation='relu', padding='same', name='block2_conv2', data_format=IMAGE_ORDERING )(x)
-    x = MaxPooling2D((2, 2), strides=(2, 2), name='block2_pool', data_format=IMAGE_ORDERING )(x)
-    f2 = x
+def FluidNet(input_height=128, input_width=128, depth_channels=1, normal_channels=3):
+    IMAGE_ORDERING = "channels_last"
+    img_input = Input(shape=(input_height, input_width, 6), name='combined_input')  # Assume 128x128x6 input
 
-    # Block 3 32x32
-    x = Conv2D(72, (2, 2), activation='relu', padding='same', name='block3_conv1', data_format=IMAGE_ORDERING )(x)
-    x = Conv2D(72, (2, 3), activation='relu', padding='same', name='block3_conv2', data_format=IMAGE_ORDERING )(x)
-    x = Conv2D(72, (2, 2), activation='relu', padding='same', name='block3_conv3', data_format=IMAGE_ORDERING )(x)
-    x = MaxPooling2D((2, 2), strides=(2, 2), name='block3_pool', data_format=IMAGE_ORDERING )(x)
-    pool3 = x
+    # Block 1
+    x = Conv2D(32, (3, 3), activation='relu', padding='same', data_format=IMAGE_ORDERING)(img_input)
+    x = Conv2D(32, (3, 3), activation='relu', padding='same', data_format=IMAGE_ORDERING)(x)
+    x = MaxPooling2D((2, 2), name='block1_pool', data_format=IMAGE_ORDERING)(x)
+    f1 = x  # Feature map 1
 
-    # Block 4 16x16
-    x = Conv2D(144, (2, 2), activation='relu', padding='same', name='block4_conv1', data_format=IMAGE_ORDERING )(x)
-    x = Conv2D(144, (2, 2), activation='relu', padding='same', name='block4_conv2', data_format=IMAGE_ORDERING )(x)
-    x = Conv2D(144, (2, 2), activation='relu', padding='same', name='block4_conv3', data_format=IMAGE_ORDERING )(x)
-    pool4 = MaxPooling2D((2, 2), strides=(2, 2), name='block4_pool', data_format=IMAGE_ORDERING )(x)
+    # Block 2
+    x = Conv2D(64, (3, 3), activation='relu', padding='same', data_format=IMAGE_ORDERING)(x)
+    x = Conv2D(64, (3, 3), activation='relu', padding='same', data_format=IMAGE_ORDERING)(x)
+    x = MaxPooling2D((2, 2), name='block2_pool', data_format=IMAGE_ORDERING)(x)
+    f2 = x  # Feature map 2
 
-    # Block 5 8x8
-    x = Conv2D(144, (2, 2), activation='relu', padding='same', name='block5_conv1', data_format=IMAGE_ORDERING )(pool4)
-    x = Conv2D(144, (2, 2), activation='relu', padding='same', name='block5_conv2', data_format=IMAGE_ORDERING )(x)
-    x = Conv2D(144, (2, 2), activation='relu', padding='same', name='block5_conv3', data_format=IMAGE_ORDERING )(x)
-    pool5 = MaxPooling2D((2, 2), strides=(2, 2), name='block5_pool', data_format=IMAGE_ORDERING )(x)
-    
-    # Block Transpose <DECODER> : Depth
-    #1st deconv layer 4x4
-    x = (Conv2DTranspose( 72, kernel_size=(4,4) ,  strides=(2,2) , padding='same', dilation_rate = (1,1), use_bias=False, data_format=IMAGE_ORDERING, name="Transpose_pool5" ) (pool5))
-   
-    #concatinate x and pool4 for 2nd Deconv layer 8X8
-    x = concatenate ([x, pool4],axis = 3)
-    x = (Conv2DTranspose( 36 , kernel_size=(6,6) ,  strides=(2,2) ,padding='same', dilation_rate = (1,1), use_bias=False, data_format=IMAGE_ORDERING, name="Transpose_pool4")(x))
-    
-    #concatinate x and pool3 for 3rd Deconv layer 28x28
-    x = concatenate ([x, pool3],axis = 3)    
-    x= (Conv2DTranspose( 18 , kernel_size=(4,4) ,  strides=(2,2) , padding='same',dilation_rate = (1,1), use_bias=False, data_format=IMAGE_ORDERING, name="Transpose_pool3" )(x))
-    
-    #concatinate x and f2 for 4th Deconv layer
-    x = concatenate ([x, f2],axis = 3)    
-    x = (Conv2DTranspose( 9 , kernel_size=(4,4) ,  strides=(2,2) ,  padding='same',dilation_rate = (1,1), use_bias=False, data_format=IMAGE_ORDERING, name="Transpose_pool2" )(x))
-    
-    #concatinate x and f1 for 5th Deconv layer
-    
-    x = concatenate ([x, f1],axis = 3)    
-    x = (Conv2DTranspose( nClasses + nClasses1 + 7  , kernel_size=(3,3) ,  strides=(2,2) , padding='same',dilation_rate = (1,1), use_bias=False, data_format=IMAGE_ORDERING, name="Transpose_pool1" )(x))
-    
-    o = x
-    o = (Activation('sigmoid', name="depth_out"))(o)
+    # Block 3
+    x = Conv2D(128, (3, 3), activation='relu', padding='same', data_format=IMAGE_ORDERING)(x)
+    x = Conv2D(128, (3, 3), activation='relu', padding='same', data_format=IMAGE_ORDERING)(x)
+    x = MaxPooling2D((2, 2), name='block3_pool', data_format=IMAGE_ORDERING)(x)
+    f3 = x  # Feature map 3
 
-    # Block Transpose <DECODER> : Scale
-    #1st deconv layer 7x7
-    x2 = (Conv2DTranspose( 72, kernel_size=(4,4) ,  strides=(2,2) , padding='same', dilation_rate = (1,1), use_bias=False, data_format=IMAGE_ORDERING, name="Transpose_pool5_2" ) (pool5))
-   
-    #concatinate x and pool4 for 2nd Deconv layer 14x14
-    x2 = concatenate ([x2, pool4],axis = 3)
-    x2 = (Conv2DTranspose( 36 , kernel_size=(6,6) ,  strides=(2,2) ,padding='same', dilation_rate = (1,1), use_bias=False, data_format=IMAGE_ORDERING, name="Transpose_pool4_2")(x2))
-    
-    #concatinate x and pool3 for 3rd Deconv layer 28x28
-    x2 = concatenate ([x2, pool3],axis = 3)    
-    x2= (Conv2DTranspose( 18 , kernel_size=(4,4) ,  strides=(2,2) , padding='same',dilation_rate = (1,1), use_bias=False, data_format=IMAGE_ORDERING, name="Transpose_pool3_2" )(x2))
-    
-    #concatinate x and f2 for 4th Deconv layer
-    x2 = concatenate ([x2, f2],axis = 3)    
-    x2 = (Conv2DTranspose( 9 , kernel_size=(4,4) ,  strides=(2,2) ,  padding='same',dilation_rate = (1,1), use_bias=False, data_format=IMAGE_ORDERING, name="Transpose_pool2_2" )(x2))
-    
-    #concatinate x and f1 for 5th Deconv layer
-    
-    x2 = concatenate ([x2, f1],axis = 3)    
-    x2 = (Conv2DTranspose( 7 , kernel_size=(3,3) ,  strides=(2,2) , padding='same',dilation_rate = (1,1), use_bias=False, data_format=IMAGE_ORDERING, name="Transpose_pool1_2" )(x2))
-    
-    o2 = x2
-    o2 = (Activation('sigmoid', name="scale_out"))(o2)
+    # Block 4
+    x = Conv2D(256, (3, 3), activation='relu', padding='same', data_format=IMAGE_ORDERING)(x)
+    x = Conv2D(256, (3, 3), activation='relu', padding='same', data_format=IMAGE_ORDERING)(x)
+    x = MaxPooling2D((2, 2), name='block4_pool', data_format=IMAGE_ORDERING)(x)
+    f4 = x  # Feature map 4
 
-    singleOut = concatenate([o,o2],axis = 3, name="single_out")
+    # Decoder to upsample and produce depth and normal maps
+    x = Conv2DTranspose(256, (4, 4), strides=(2, 2), padding='same', use_bias=False, data_format=IMAGE_ORDERING)(f4)
+    x = concatenate([x, f3], axis=-1)  # Concatenate with feature map from Block 3
 
-    #model creation
-    model = Model(img_input, singleOut)
-       
+    x = Conv2DTranspose(128, (4, 4), strides=(2, 2), padding='same', use_bias=False, data_format=IMAGE_ORDERING)(x)
+    x = concatenate([x, f2], axis=-1)  # Concatenate with feature map from Block 2
+
+    x = Conv2DTranspose(64, (4, 4), strides=(2, 2), padding='same', use_bias=False, data_format=IMAGE_ORDERING)(x)
+    x = concatenate([x, f1], axis=-1)  # Concatenate with feature map from Block 1
+
+    x = Conv2DTranspose(depth_channels + normal_channels, (4, 4), strides=(2, 2), padding='same', use_bias=False, data_format=IMAGE_ORDERING)(x)
+    outputs = Activation('sigmoid', name='single_out')(x)  # Assuming sigmoid activation
+
+    model = Model(inputs=img_input, outputs=outputs)
+
     return model
+
 
 def depth_loss (y_true, y_pred): 
     d = tf.subtract(y_pred,y_true)
@@ -149,14 +103,10 @@ def normal_loss(y_true, y_pred):
     normal_output = tf.reduce_mean((sum_square_d/n_pixels) - 0.5* (square_sum_d/square_n_pixels))
     return normal_output 
 
-
-def depth_to_normal(y_pred_depth, y_true_normal, scale_pred, scale_true):
+def depth_to_normal(y_pred_depth):
 
     Scale = 127.5
     epsilon = 1e-6
-
-    # Normalize y_true_normal
-    y_true_normal = scale_true[:, :, :, 0:1] + (scale_true[:, :, :, 1:2] - scale_true[:, :, :, 0:1]) * y_true_normal
 
     # Applying Laplacian filter to enhance edges
     laplacian_filter = tf.constant([[0, 1, 0], [1, -4, 1], [0, 1, 0]], dtype=tf.float32, shape=[3, 3, 1, 1])
@@ -172,12 +122,10 @@ def depth_to_normal(y_pred_depth, y_true_normal, scale_pred, scale_true):
     normal = normal_ori / (tf.linalg.norm(normal_ori, axis=-1, keepdims=True) + epsilon)
     normal = (normal + 1) / 2  # Normalize the output
 
-    return normal, y_true_normal
+    return normal
 
 def mean_squared_error(y_true, y_pred):
     return K.mean(K.square(y_pred - y_true), axis=-1)
-
-
 
 def scale_loss(y_true,y_pred):
     pred_depth_min = y_pred[:,0:1,0:1]
@@ -197,20 +145,34 @@ def scale_loss(y_true,y_pred):
 
     return tf.reduce_mean(loss_depth_min + loss_depth_max + loss_normal_min + loss_normal_max)
 
+def get_scale_data(depth_data, normal_data):
+    depth_min = tf.reduce_min(depth_data, axis=[1, 2], keepdims=True)
+    depth_max = tf.reduce_max(depth_data, axis=[1, 2], keepdims=True)
 
+    normal_min = tf.reduce_min(normal_data, axis=[1, 2], keepdims=True)
+    normal_max = tf.reduce_max(normal_data, axis=[1, 2], keepdims=True)
+
+    # Expand dimensions of depth tensors to match the shape of normal tensors
+    depth_min = tf.expand_dims(depth_min, -1)  # shape becomes [?, 1, 1, 1]
+    depth_max = tf.expand_dims(depth_max, -1)  # shape becomes [?, 1, 1, 1]
+
+    scale_data = tf.concat([depth_min, depth_max, normal_min, normal_max], axis=-1)
+    scale_data = tf.tile(scale_data, [1, 128, 128, 1])
+    return scale_data
 
 def combined_loss(y_true,y_pred):
     print("y_true shape:", y_true.shape)
     print("y_pred shape:", y_pred.shape)
-    #print(K.int_shape(y_true)[0],K.shape(y_pred))
 
     depth_true = y_true[:,:,:,0]
     normal_true = y_true[:,:,:,1:4] 
-    scale_true = y_true[:,:,:,10:]
 
     depth_pred = y_pred[:,:,:,0]
     normal_pred = y_pred[:,:,:,1:4]
-    scale_pred = y_pred[:,:,:,10:]
+
+    scale_pred = get_scale_data(depth_pred, normal_pred)
+    scale_true = get_scale_data(depth_true, normal_true)
+    print("scale_true shape:", scale_true.shape)
 
     depth_true = tf.expand_dims(depth_true, -1)
     depth_pred = tf.expand_dims(depth_pred, -1)
@@ -218,10 +180,7 @@ def combined_loss(y_true,y_pred):
     alpha = 0.2
     beta = 0.2
     gamma = 0.2
-    delta = 0.2
     theta = 0.2
-    tau = 0.0
-    lamda = 0
 
     #depth loss
     loss_depth = alpha*(depth_loss(depth_true,depth_pred))
@@ -230,17 +189,14 @@ def combined_loss(y_true,y_pred):
     loss_normal = beta*(normal_loss(normal_true,normal_pred))
     
     #normal from depth
-    normal_from_depth, rescaled_true_normal = depth_to_normal(depth_pred,normal_true,scale_pred,scale_true)
-    loss_depth_to_normal = gamma*(normal_loss(rescaled_true_normal,normal_from_depth)) 
+    normal_from_depth = depth_to_normal(depth_pred)
+    loss_depth_to_normal = gamma*(normal_loss(normal_true,normal_from_depth)) 
 
-    #ray_tracing
-    # ray_traced_tensor= raytracing_loss(depth_pred,normal_pred,ref_true,scale_true)
-    # loss_ray_trace = delta * vae_loss(img_true,ray_traced_tensor)
 
     #scale_loss
     loss_scale = theta * scale_loss(scale_true,scale_pred)
+    print("CLEAR ON THE LOSS FUNCTIONS")
 
-    # return (loss_depth + loss_normal + loss_depth_to_normal + loss_ray_trace + loss_scale)
     return (loss_depth + loss_normal + loss_depth_to_normal + loss_scale)
 
 def create_model():
@@ -260,7 +216,7 @@ def create_model():
     loss_weights = {"single_out": 1.0}
 
 
-    model = FluidNet(nClasses=1, nClasses1 = 3)  # Adjust the number of classes if necessary
+    model = FluidNet()  # Adjust the number of classes if necessary
     model.compile(
         optimizer='adam', 
         loss=loss_funcs, 
