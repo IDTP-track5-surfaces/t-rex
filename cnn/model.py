@@ -174,82 +174,9 @@ def depth_to_normal(y_pred_depth, y_true_normal, scale_pred, scale_true):
 
     return normal, y_true_normal
 
-
-
-
-
-def snell_refraction(normal,s1,n1,n2):
-    this_normal = normal
-    term_1 = tf.linalg.cross(this_normal,tf.linalg.cross(-this_normal,s1))
-    term_temp = tf.linalg.cross(this_normal,s1)   
-    n_sq = (n1/n2)**2
-    term_2 = tf.sqrt(tf.subtract(1.0,tf.multiply(n_sq,tf.reduce_sum(tf.multiply(term_temp,term_temp),axis = 3))))   
-    term_3 = tf.stack([term_2, term_2, term_2],axis = 3)   
-    nn = (n1/n2)
-    s2 = tf.subtract(tf.multiply(nn,term_1) , tf.multiply(this_normal,term_3))
-    return s2   
-
-def raytracing_loss(depth, normal, background, scale):
-    step = 255 / 2
-    n1 = 1
-    n2 = 1.33
-
-    depth_min = scale[:, 0:1, 0:1, 0:1]
-    depth_max = scale[:, 0:1, 0:1, 1:2]
-    normal_min = scale[:, 0:1, 0:1, 2:3]
-    normal_max = scale[:, 0:1, 0:1, 3:4]
-
-    # Tile the min and max tensors to match the dimensions of the normal tensor
-    normal_min = tf.tile(normal_min, [1, 128, 128, 1])
-    normal_max = tf.tile(normal_max, [1, 128, 128, 1])
-
-    depth = depth_min + (depth_max - depth_min) * depth
-    normal = normal_min + (normal_max - normal_min) * normal
-
-    depth = tf.squeeze(depth, axis=-1)  # Remove the last dimension if single-channel
-
-    # Construct the initial direction vector for Snell's refraction
-    s1 = tf.zeros_like(depth)
-    s11 = -1 * tf.ones_like(depth)
-    assigned_s1 = tf.stack([s1, s1, s11], axis=3)
-
-    s2 = snell_refraction(normal, assigned_s1, n1, n2)
-
-    x_c_ori, y_c_ori, lamda_ori = tf.split(s2, [1, 1, 1], axis=3)
-    lamda = -1 * tf.divide(depth, tf.squeeze(lamda_ori))
-
-    x_c = tf.multiply(lamda, tf.squeeze(x_c_ori)) * step
-    y_c = tf.multiply(lamda, tf.squeeze(y_c_ori)) * step
-
-    flow = tf.stack([y_c, -x_c], axis=-1)
-
-    # Use TensorFlow's built-in function for image warping given the flow field
-    out_im_tensor = tfa.image.dense_image_warp(background, flow)
-    # Ensure the output has the same number of channels as the input background
-    if out_im_tensor.shape[-1] != background.shape[-1]:
-        out_im_tensor = out_im_tensor[..., :background.shape[-1]]  # Adjust channels by slicing if necessary
-
-    return out_im_tensor
-
 def mean_squared_error(y_true, y_pred):
     return K.mean(K.square(y_pred - y_true), axis=-1)
 
-def vae_loss(y_true, y_pred):
-    # Ensure both tensors have the same last dimension size
-    if len(y_pred.shape) == 4 and y_pred.shape[-1] != y_true.shape[-1]:
-        y_pred = tf.squeeze(y_pred, axis=-1)  # Assuming y_pred has an unnecessary extra dimension
-    
-    # Calculate MSE
-    loss1 = tf.reduce_mean(tf.square(y_true - y_pred), axis=[1, 2])
-    
-    # Binary Cross-Entropy
-    if len(y_true.shape) == 3:  # If y_true is missing the channel dimension
-        y_true = tf.expand_dims(y_true, -1)
-        y_pred = tf.expand_dims(y_pred, -1)
-    loss2 = tf.reduce_mean(tf.keras.losses.binary_crossentropy(y_true, y_pred, from_logits=False), axis=[1, 2])
-
-    # Combine losses
-    return tf.reduce_mean(loss1 + loss2)
 
 
 def scale_loss(y_true,y_pred):
@@ -278,9 +205,7 @@ def combined_loss(y_true,y_pred):
     #print(K.int_shape(y_true)[0],K.shape(y_pred))
 
     depth_true = y_true[:,:,:,0]
-    normal_true = y_true[:,:,:,1:4]
-    img_true = y_true[:,:,:,4:7]
-    ref_true = y_true[:,:,:,7:10]
+    normal_true = y_true[:,:,:,1:4] 
     scale_true = y_true[:,:,:,10:]
 
     depth_pred = y_pred[:,:,:,0]
