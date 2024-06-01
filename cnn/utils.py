@@ -276,7 +276,7 @@ def calculate_metrics(y_true, y_pred):
     rmse = tf.keras.metrics.RootMeanSquaredError()(y_true, y_pred).numpy()
     mae = tf.keras.metrics.MeanAbsoluteError()(y_true, y_pred).numpy()
 
-    return acc_125, acc_15625, acc_1953125, rmse, mae
+    return acc_125, acc_15625, acc_1953125, rmse, mae #TODO: Add ARE
 
 def threshold_accuracy(y_true, y_pred, threshold=1.25):
     ratio = tf.maximum(y_true / y_pred, y_pred / y_true)
