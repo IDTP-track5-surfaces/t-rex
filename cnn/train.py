@@ -47,6 +47,8 @@ if __name__ == "__main__":
     print("starting...")
     with tf.device('/gpu:0'):  # Use '/gpu:0' if TensorFlow-Metal is installed
         print("Preparing validation data...")
+        print("Is eager execution enabled: ", tf.executing_eagerly())
+        
         val_root_dir = ROOT_DIR + VAL_DATA + "/validation/" 
         val_filepaths = Filepaths(val_root_dir)
         val_input_tensors, val_output_tensors = load_and_preprocess_data(val_filepaths)
