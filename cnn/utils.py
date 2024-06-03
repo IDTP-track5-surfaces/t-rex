@@ -9,6 +9,12 @@ import tensorflow as tf
 
 import tensorflow.keras.backend as K
 
+import os
+import shutil
+import numpy as np
+from scipy.interpolate import griddata
+
+import matplotlib.pyplot as plt
 # Keras losses
 def mean_squared_error(y_true, y_pred):
     return K.mean(K.square(y_pred - y_true), axis=-1)
@@ -230,3 +236,118 @@ def combined_loss(y_true,y_pred):
     loss_in_img = lamda * vae_loss(img_true,img_pred)
 
     return (loss_depth + loss_normal + loss_ray_trace + loss_scale + loss_reference + loss_in_img)
+
+def move_file(file_path, dest_dir):
+    if os.path.exists(file_path):
+        dest_path = os.path.join(dest_dir, os.path.basename(file_path))
+        shutil.move(file_path, dest_path)
+
+def plot_metrics(history):
+    # Plot training & validation loss values
+    plt.figure(figsize=(14, 5))
+    
+    plt.subplot(1, 2, 1)
+    plt.plot(history.history['loss'])
+    plt.plot(history.history['val_loss'])
+    plt.title('Model Loss')
+    plt.ylabel('Loss')
+    plt.xlabel('Epoch')
+    plt.legend(['Train', 'Validation'], loc='upper right')
+    
+    # Plot each of the other metrics
+    metrics = [key for key in history.history.keys() if 'loss' not in key and 'val_' in key]
+    for metric in metrics:
+        plt.subplot(1, 2, 2)
+        plt.plot(history.history[metric.replace('val_', '')], label=f'Train {metric}')
+        plt.plot(history.history[metric], label=f'Validation {metric}')
+        plt.title('Model Metrics')
+        plt.ylabel('Metric Value')
+        plt.xlabel('Epoch')
+        plt.legend(loc='upper right')
+    
+    plt.tight_layout()
+    plt.show()
+    
+def calculate_metrics(y_true, y_pred):
+    # Calculate the accuracy metrics
+    acc_125 = threshold_accuracy(y_true, y_pred, 1.25).numpy()
+    acc_15625 = threshold_accuracy(y_true, y_pred, 1.25**2).numpy()
+    acc_1953125 = threshold_accuracy(y_true, y_pred, 1.25**3).numpy()
+    rmse = tf.keras.metrics.RootMeanSquaredError()(y_true, y_pred).numpy()
+    mae = tf.keras.metrics.MeanAbsoluteError()(y_true, y_pred).numpy()
+
+    return acc_125, acc_15625, acc_1953125, rmse, mae #TODO: Add ARE
+
+def threshold_accuracy(y_true, y_pred, threshold=1.25):
+    ratio = tf.maximum(y_true / y_pred, y_pred / y_true)
+    return tf.reduce_mean(tf.cast(ratio < threshold, tf.float32))
+
+def absolute_relative_error(y_true, y_pred):
+    # Avoid division by zero
+    y_true = tf.cast(y_true, dtype=tf.float32)
+    epsilon = tf.keras.backend.epsilon()  # Small constant for numerical stability
+    # Calculate Absolute Relative Error
+    are = tf.abs((y_true - y_pred) / (y_true + epsilon))
+    return tf.reduce_mean(are)
+
+def plot_inference(infer_refracted, infer_reference, infer_depth, infer_predictions):
+    fig, axes = plt.subplots(3, 4, figsize=(12, 12))
+    for i in range(3):
+        acc_metrics = calculate_metrics(infer_depth[i], infer_predictions[i])
+        acc_125, acc_15625, acc_1953125, rmse, are = acc_metrics
+        metric_str = f"δ1: {acc_125:.3f}, δ2: {acc_15625:.3f}, δ3: {acc_1953125:.3f}\nRMSE: {rmse:.3f}, ARE: {are:.3f}"
+        
+        axes[i, 0].imshow(infer_refracted[i].numpy())
+        axes[i, 0].set_title('Refracted Image')
+        axes[i, 0].axis('off')
+
+        axes[i, 1].imshow(infer_reference[i].numpy())
+        axes[i, 1].set_title('Reference Image')
+        axes[i, 1].axis('off')
+
+        im_pred = axes[i, 2].imshow(infer_predictions[i, :, :, 0], cmap='viridis')
+        axes[i, 2].set_title('Predicted Depth')
+        axes[i, 2].axis('off')
+
+        im_gt = axes[i, 3].imshow(infer_depth[i, :, :, 0], cmap='viridis')
+        axes[i, 3].set_title('Ground Truth Depth')
+        axes[i, 3].axis('off')
+
+        plt.colorbar(im_pred, ax=axes[i, 2])
+        plt.colorbar(im_gt, ax=axes[i, 3])
+        
+        axes[i, 2].annotate(metric_str, xy=(0.5, -0.1), xycoords='axes fraction', ha='center', 
+                                va='top', fontsize=8, color='white', backgroundcolor='black')
+
+    plt.tight_layout()
+    plt.show()
+    
+def exp_f(x,a,b,c):
+    return a*np.exp(-(x/b)) + c;
+ 
+def pol2_f(x,a,b,c):
+    return a*x + b*x**2 + c;
+ 
+def Puff_profile(x, y, ta, depth = -0.00326456, dx=0, dy=0, width=1):
+    # evaluation of surface deformation extracted from EXP_ID=142
+    upper = exp_f(ta,-6.17761515e-05,  1.78422769e+00,  7.40139158e-05)
+    lower = exp_f(ta,0.00377156,  1.45234773, depth)
+    a     = pol2_f(ta,0.31294945, -0.00963803,  2.6743828)
+    b     = pol2_f(ta,38.56906702,  -1.6278976 , 453.87937763)
+    r = np.sqrt((x-dx)**2 + (y-dy)**2)/width
+    
+    # scaled logistic function describing surface deformation
+    return lower + (upper - lower) / (1 + np.exp(a - b * r))
+
+def grad_puff_profile(x, y, ta, depth = -0.00326456, dx=0, dy=0, width=1):
+    upper = exp_f(ta,-6.17761515e-05,  1.78422769e+00,  7.40139158e-05)
+    lower = exp_f(ta,0.00377156,  1.45234773, depth)
+    a     = pol2_f(ta,0.31294945, -0.00963803,  2.6743828)
+    b     = pol2_f(ta,38.56906702,  -1.6278976 , 453.87937763)
+    
+    r = np.sqrt((x-dx)**2 + (y-dy)**2)/width
+    d = b * np.exp(a - b * r)*(upper - lower) / (1 + np.exp(a - b * r))/r
+    dx = d * x
+    dy = d * y
+    return (dx, dy)
+

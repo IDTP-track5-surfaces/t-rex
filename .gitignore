@@ -3,3 +3,4 @@ data/*
 *.pyc
 *.h5
 *.keras
+notes.txt
