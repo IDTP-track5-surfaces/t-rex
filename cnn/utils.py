@@ -242,7 +242,7 @@ def move_file(file_path, dest_dir):
         dest_path = os.path.join(dest_dir, os.path.basename(file_path))
         shutil.move(file_path, dest_path)
 
-def plot_metrics(history):
+def plot_metrics(history,date_time):
     # Plot training & validation loss values
     plt.figure(figsize=(14, 5))
     
@@ -266,7 +266,10 @@ def plot_metrics(history):
         plt.legend(loc='upper right')
     
     plt.tight_layout()
+    plt.savefig("logs/" + str(date_time) + "/metrics.png")
     plt.show()
+    
+    return plt
     
 def calculate_metrics(y_true, y_pred):
     # Calculate the accuracy metrics
@@ -274,26 +277,49 @@ def calculate_metrics(y_true, y_pred):
     acc_15625 = threshold_accuracy(y_true, y_pred, 1.25**2).numpy()
     acc_1953125 = threshold_accuracy(y_true, y_pred, 1.25**3).numpy()
     rmse = tf.keras.metrics.RootMeanSquaredError()(y_true, y_pred).numpy()
-    mae = tf.keras.metrics.MeanAbsoluteError()(y_true, y_pred).numpy()
+    are = absolute_relative_error(y_true, y_pred).numpy()
 
-    return acc_125, acc_15625, acc_1953125, rmse, mae #TODO: Add ARE
+    return acc_125, acc_15625, acc_1953125, rmse, are 
 
 def threshold_accuracy(y_true, y_pred, threshold=1.25):
-    ratio = tf.maximum(y_true / y_pred, y_pred / y_true)
+
+    y_true = tf.cast(y_true, dtype=tf.float32)
+    y_pred = tf.cast(y_pred, dtype=tf.float32)
+
+    depth_true = y_true[:,:,:,0]
+    depth_pred = y_pred[:,:,:,0]
+
+    ratio = tf.maximum(depth_true / depth_pred, depth_pred / depth_true)
     return tf.reduce_mean(tf.cast(ratio < threshold, tf.float32))
 
-def absolute_relative_error(y_true, y_pred):
+def root_mean_squared_error(y_true, y_pred): # RMSE on depth
+    y_true = tf.cast(y_true, dtype=tf.float32)
+    y_pred = tf.cast(y_pred, dtype=tf.float32)
+    depth_true = y_true[:,:,:,0]
+    depth_pred = y_pred[:,:,:,0]
+
+    # Calculate Root Mean Squared Error
+    rmse = tf.sqrt(tf.reduce_mean(tf.square(depth_true - depth_pred)))
+    return rmse
+
+def absolute_relative_error(y_true, y_pred): # ARE on depth
     # Avoid division by zero
     y_true = tf.cast(y_true, dtype=tf.float32)
+    y_pred = tf.cast(y_pred, dtype=tf.float32)
+    depth_true = y_true[:,:,:,0]
+    depth_pred = y_pred[:,:,:,0]
+
     epsilon = tf.keras.backend.epsilon()  # Small constant for numerical stability
     # Calculate Absolute Relative Error
-    are = tf.abs((y_true - y_pred) / (y_true + epsilon))
+    are = tf.abs(depth_true - depth_pred) / (depth_true + epsilon)
     return tf.reduce_mean(are)
 
-def plot_inference(infer_refracted, infer_reference, infer_depth, infer_predictions):
+def plot_inference(infer_refracted, infer_reference, infer_true_output, infer_predictions, date_time):
     fig, axes = plt.subplots(3, 4, figsize=(12, 12))
     for i in range(3):
-        acc_metrics = calculate_metrics(infer_depth[i], infer_predictions[i])
+        true_output_expanded = tf.expand_dims(infer_true_output[i], axis=0)
+        predictions_expanded = tf.expand_dims(infer_predictions[i], axis=0)
+        acc_metrics = calculate_metrics(true_output_expanded, predictions_expanded)
         acc_125, acc_15625, acc_1953125, rmse, are = acc_metrics
         metric_str = f"δ1: {acc_125:.3f}, δ2: {acc_15625:.3f}, δ3: {acc_1953125:.3f}\nRMSE: {rmse:.3f}, ARE: {are:.3f}"
         
@@ -309,7 +335,7 @@ def plot_inference(infer_refracted, infer_reference, infer_depth, infer_predicti
         axes[i, 2].set_title('Predicted Depth')
         axes[i, 2].axis('off')
 
-        im_gt = axes[i, 3].imshow(infer_depth[i, :, :, 0], cmap='viridis')
+        im_gt = axes[i, 3].imshow(infer_true_output[i, :, :, 0], cmap='viridis')
         axes[i, 3].set_title('Ground Truth Depth')
         axes[i, 3].axis('off')
 
@@ -320,7 +346,31 @@ def plot_inference(infer_refracted, infer_reference, infer_depth, infer_predicti
                                 va='top', fontsize=8, color='white', backgroundcolor='black')
 
     plt.tight_layout()
+    plt.savefig("logs/" + str(date_time) + "/inference.png")
     plt.show()
+    return plt
+
+def save_history(history, filename):
+    with open(filename, 'w') as f:
+        # Header
+        f.write('Epoch, Training Loss, Root Mean Squared Error, Absolute Relative Error, Accuracy 125, Accuracy 15625, Accuracy 1953125, Validation Loss, Validation Root Mean Squared Error, Validation Absolute Relative Error, Validation Accuracy 125, Validation Accuracy 15625, Validation Accuracy 1953125\n')
+        
+        # Data
+        for i in range(len(history.history['loss'])):
+            f.write(f"{i+1}, "
+                    f"{history.history['loss'][i]}, "
+                    f"{history.history['root_mean_squared_error'][i]}, "
+                    f"{history.history['absolute_relative_error'][i]}, "
+                    f"{history.history['accuracy_125'][i]}, "
+                    f"{history.history['accuracy_15625'][i]}, "
+                    f"{history.history['accuracy_1953125'][i]}, "
+                    f"{history.history['val_loss'][i]}, "
+                    f"{history.history['val_root_mean_squared_error'][i]}, "
+                    f"{history.history['val_absolute_relative_error'][i]}, "
+                    f"{history.history['val_accuracy_125'][i]}, "
+                    f"{history.history['val_accuracy_15625'][i]}, "
+                    f"{history.history['val_accuracy_1953125'][i]}\n")
+
     
 def exp_f(x,a,b,c):
     return a*np.exp(-(x/b)) + c;

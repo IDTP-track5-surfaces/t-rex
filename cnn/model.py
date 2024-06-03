@@ -6,7 +6,7 @@ import keras.backend as K
 
 import tensorflow as tf
 import tensorflow_addons as tfa
-from utils import threshold_accuracy, absolute_relative_error
+from utils import threshold_accuracy, absolute_relative_error, root_mean_squared_error
 
 
 #create network
@@ -127,38 +127,34 @@ def depth_to_normal(y_pred_depth):
 def mean_squared_error(y_true, y_pred):
     return K.mean(K.square(y_pred - y_true), axis=-1)
 
-def scale_loss(y_true,y_pred):
-    pred_depth_min = y_pred[:,0:1,0:1]
-    pred_depth_max = y_pred[:,0:1,1:2]
-    pred_normal_min = y_pred[:,0:1,2:3]  
-    pred_normal_max = y_pred[:,0:1,3:4]
+def scale_loss(depth_true, depth_pred, normal_true, normal_pred):
 
-    true_depth_min = y_true[:,0:1,0:1]
-    true_depth_max = y_true[:,0:1,1:2]
-    true_normal_min = y_true[:,0:1,2:3]  
-    true_normal_max = y_true[:,0:1,3:4]
+    # Calculate min and max for depth
+    depth_min_true = tf.reduce_min(depth_true, axis=[1, 2], keepdims=True)
+    depth_max_true = tf.reduce_max(depth_true, axis=[1, 2], keepdims=True)
+    depth_min_pred = tf.reduce_min(depth_pred, axis=[1, 2], keepdims=True)
+    depth_max_pred = tf.reduce_max(depth_pred, axis=[1, 2], keepdims=True)
+    # tf.print("depth_max_true:", depth_max_true)
+    # tf.print("depth_max_pred:", depth_max_pred)
+    # tf.print("depth_min_true:", depth_min_true)
+    # tf.print("depth_min_pred:", depth_min_pred)
 
-    loss_depth_min = mean_squared_error(true_depth_min, pred_depth_min)
-    loss_depth_max = mean_squared_error(true_depth_max, pred_depth_max)
-    loss_normal_min = mean_squared_error(true_normal_min, pred_normal_min)
-    loss_normal_max = mean_squared_error(true_normal_max, pred_normal_max)
 
+    # Calculate min and max for normals
+    normal_min_true = tf.reduce_min(normal_true, axis=[1, 2], keepdims=True)
+    normal_max_true = tf.reduce_max(normal_true, axis=[1, 2], keepdims=True)
+    normal_min_pred = tf.reduce_min(normal_pred, axis=[1, 2], keepdims=True)
+    normal_max_pred = tf.reduce_max(normal_pred, axis=[1, 2], keepdims=True)
+
+    # Calculate MSE for depth and normal ranges
+    loss_depth_min = K.mean(K.square(depth_min_pred - depth_min_true))
+    loss_depth_max = K.mean(K.square(depth_max_pred - depth_max_true))
+    loss_normal_min = K.mean(K.square(normal_min_pred - normal_min_true))
+    loss_normal_max = K.mean(K.square(normal_max_pred - normal_max_true))
+
+    # Combine the losses
     return tf.reduce_mean(loss_depth_min + loss_depth_max + loss_normal_min + loss_normal_max)
 
-def get_scale_data(depth_data, normal_data):
-    depth_min = tf.reduce_min(depth_data, axis=[1, 2], keepdims=True)
-    depth_max = tf.reduce_max(depth_data, axis=[1, 2], keepdims=True)
-
-    normal_min = tf.reduce_min(normal_data, axis=[1, 2], keepdims=True)
-    normal_max = tf.reduce_max(normal_data, axis=[1, 2], keepdims=True)
-
-    # Expand dimensions of depth tensors to match the shape of normal tensors
-    depth_min = tf.expand_dims(depth_min, -1)  # shape becomes [?, 1, 1, 1]
-    depth_max = tf.expand_dims(depth_max, -1)  # shape becomes [?, 1, 1, 1]
-
-    scale_data = tf.concat([depth_min, depth_max, normal_min, normal_max], axis=-1)
-    scale_data = tf.tile(scale_data, [1, 128, 128, 1])
-    return scale_data
 
 def combined_loss(y_true,y_pred):
     print("y_true shape:", y_true.shape)
@@ -169,10 +165,6 @@ def combined_loss(y_true,y_pred):
 
     depth_pred = y_pred[:,:,:,0]
     normal_pred = y_pred[:,:,:,1:4]
-
-    scale_pred = get_scale_data(depth_pred, normal_pred)
-    scale_true = get_scale_data(depth_true, normal_true)
-    print("scale_true shape:", scale_true.shape)
 
     depth_true = tf.expand_dims(depth_true, -1)
     depth_pred = tf.expand_dims(depth_pred, -1)
@@ -194,7 +186,7 @@ def combined_loss(y_true,y_pred):
 
 
     #scale_loss
-    loss_scale = theta * scale_loss(scale_true,scale_pred)
+    loss_scale = theta * scale_loss(depth_true, depth_pred, normal_true, normal_pred)
     print("CLEAR ON THE LOSS FUNCTIONS")
 
     return (loss_depth + loss_normal + loss_depth_to_normal + loss_scale)
@@ -222,7 +214,7 @@ def create_model():
         loss=loss_funcs, 
         loss_weights=loss_weights,
         metrics=[
-            tf.keras.metrics.RootMeanSquaredError(), 
+            root_mean_squared_error, 
             absolute_relative_error,
             accuracy_125,
             accuracy_15625,
@@ -236,7 +228,8 @@ def create_model():
     'accuracy_15625': accuracy_15625,
     'accuracy_1953125': accuracy_1953125,
     'combined_loss': combined_loss, 
-    'absolute_relative_error': absolute_relative_error
+    'absolute_relative_error': absolute_relative_error,
+    'root_mean_squared_error': root_mean_squared_error
 }
 
     return model , custom_objects
