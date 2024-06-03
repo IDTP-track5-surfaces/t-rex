@@ -86,16 +86,8 @@ def preprocess_data(matched_samples):
 
     input_tensors = tf.concat([refracted_tensors, reference_tensors], axis=-1)
 
-    depth_min = tf.reduce_min(normalized_depth_tensors, axis=[1, 2], keepdims=True)
-    depth_max = tf.reduce_max(normalized_depth_tensors, axis=[1, 2], keepdims=True)
 
-    normal_min = tf.reduce_min(normal_tensors, axis=[1, 2], keepdims=True)
-    normal_max = tf.reduce_max(normal_tensors, axis=[1, 2], keepdims=True)
-
-    scale_data = tf.concat([depth_min, depth_max, normal_min, normal_max], axis=-1)
-    scale_data = tf.tile(scale_data, [1, 128, 128, 1])
-
-    output_tensors = tf.concat([normalized_depth_tensors, normal_tensors, refracted_tensors, reference_tensors, scale_data], axis=-1)
+    output_tensors = tf.concat([normalized_depth_tensors, normal_tensors], axis=-1)
 
     return input_tensors, output_tensors
 
