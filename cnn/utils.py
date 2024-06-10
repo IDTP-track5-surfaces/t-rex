@@ -15,6 +15,7 @@ import numpy as np
 from scipy.interpolate import griddata
 
 import matplotlib.pyplot as plt
+import pandas as pd
 # Keras losses
 def mean_squared_error(y_true, y_pred):
     return K.mean(K.square(y_pred - y_true), axis=-1)
@@ -401,3 +402,32 @@ def grad_puff_profile(x, y, ta, depth = -0.00326456, dx=0, dy=0, width=1):
     dy = d * y
     return (dx, dy)
 
+def plot_loss(history_file):
+    # Load data from a text file
+    data = pd.read_csv(history_file, header=0)
+    # Remove any spaces from column names
+    data.columns = data.columns.str.strip()
+
+    # Extract data for plotting
+    epochs = data['Epoch']
+    training_loss = data['Training Loss']
+    validation_loss = data['Validation Loss']
+
+    # Create a plot with a logarithmic y-axis
+    plt.figure(figsize=(10, 5))
+    plt.plot(epochs, training_loss, label='Training Loss')
+    plt.plot(epochs, validation_loss, label='Validation Loss')
+
+    # Adding labels and title
+    plt.xlabel('Epoch')
+    plt.ylabel('Loss')
+    plt.title('Training and Validation Loss')
+    plt.legend()
+
+    # Show the plot
+    plt.savefig("logs/loss.png")
+    plt.show()
+
+
+if __name__ == "__main__":
+    plot_loss("/Users/mohamedgamil/Desktop/Eindhoven/block3/idp/code/t-rex/cnn/logs/20240603-181315/training_history.txt")
