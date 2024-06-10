@@ -28,7 +28,7 @@ def plot_inference(infer_refracted, infer_reference, infer_true_output, infer_pr
         acc_125, acc_15625, acc_1953125, rmse, are = acc_metrics1
         metric_str_1 = f"RMSE: {rmse:.3f}, \n ARE: {are:.3f}"
         axes[i, 2].annotate(metric_str_1, xy=(0.5, -0.1), xycoords='axes fraction', ha='center', 
-                                va='top', fontsize=10, color='black', backgroundcolor='white')
+                                va='top', fontsize=14, color='black', backgroundcolor='white')
         
 
         im_pred_2 = axes[i, 3].imshow(infer_predictions2[i, :, :, 0], cmap='viridis')
@@ -39,7 +39,7 @@ def plot_inference(infer_refracted, infer_reference, infer_true_output, infer_pr
         acc_125, acc_15625, acc_1953125, rmse, are = acc_metrics2
         metric_str_2 = f"RMSE: {rmse:.3f}, \n ARE: {are:.3f}"
         axes[i, 3].annotate(metric_str_2, xy=(0.5, -0.1), xycoords='axes fraction', ha='center',
-                                va='top', fontsize=10, color='black', backgroundcolor='white')
+                                va='top', fontsize=14, color='black', backgroundcolor='white')
 
         im_gt = axes[i, 4].imshow(infer_true_output[i, :, :, 0], cmap='viridis')
         axes[i, 4].set_title('Ground Truth Depth')
