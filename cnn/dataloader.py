@@ -76,13 +76,11 @@ def preprocess_data(matched_samples):
     normal_tensors = tf.stack(normal_tensors)
 
     # Debugging depth tensor values
-    print("Depth tensor sample (post-resize):", depth_tensors[0, :5, :5, 0])
 
     max_depth_per_sample = tf.reduce_max(depth_tensors, axis=[1, 2], keepdims=True)
     normalized_depth_tensors = depth_tensors / max_depth_per_sample
 
     # Debug normalized depth tensor values
-    print("Normalized Depth Tensors sample:", normalized_depth_tensors[0, :5, :5, 0])
 
     input_tensors = tf.concat([refracted_tensors, reference_tensors], axis=-1)
 
