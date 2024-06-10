@@ -321,7 +321,7 @@ def plot_inference(infer_refracted, infer_reference, infer_true_output, infer_pr
         predictions_expanded = tf.expand_dims(infer_predictions[i], axis=0)
         acc_metrics = calculate_metrics(true_output_expanded, predictions_expanded)
         acc_125, acc_15625, acc_1953125, rmse, are = acc_metrics
-        metric_str = f"δ1: {acc_125:.3f}, δ2: {acc_15625:.3f}, δ3: {acc_1953125:.3f}\nRMSE: {rmse:.3f}, ARE: {are:.3f}"
+        metric_str = f"RMSE: {rmse:.3f} \n ARE: {are:.3f}"
         
         axes[i, 0].imshow(infer_refracted[i].numpy())
         axes[i, 0].set_title('Refracted Image')
@@ -343,7 +343,7 @@ def plot_inference(infer_refracted, infer_reference, infer_true_output, infer_pr
         plt.colorbar(im_gt, ax=axes[i, 3])
         
         axes[i, 2].annotate(metric_str, xy=(0.5, -0.1), xycoords='axes fraction', ha='center', 
-                                va='top', fontsize=8, color='white', backgroundcolor='black')
+                                va='top', fontsize=14, color='black', backgroundcolor='white')
 
     plt.tight_layout()
     plt.savefig("logs/" + str(date_time) + "/inference.png")
