@@ -276,7 +276,7 @@ def calculate_metrics(y_true, y_pred):
     acc_125 = threshold_accuracy(y_true, y_pred, 1.25).numpy()
     acc_15625 = threshold_accuracy(y_true, y_pred, 1.25**2).numpy()
     acc_1953125 = threshold_accuracy(y_true, y_pred, 1.25**3).numpy()
-    rmse = tf.keras.metrics.RootMeanSquaredError()(y_true, y_pred).numpy()
+    rmse = root_mean_squared_error(y_true, y_pred).numpy()
     are = absolute_relative_error(y_true, y_pred).numpy()
 
     return acc_125, acc_15625, acc_1953125, rmse, are 
