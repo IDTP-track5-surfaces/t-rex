@@ -4,3 +4,4 @@ data/*
 *.h5
 *.keras
 notes.txt
+*/logs/* 
