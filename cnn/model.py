@@ -6,7 +6,7 @@ import keras.backend as K
 
 import tensorflow as tf
 import tensorflow_addons as tfa
-from utils import threshold_accuracy, absolute_relative_error
+from utils import threshold_accuracy, absolute_relative_error, root_mean_squared_error
 
 
 #create network
@@ -202,8 +202,6 @@ def scale_loss(y_true,y_pred):
 
 
 def combined_loss(y_true,y_pred):
-    print("y_true shape:", y_true.shape)
-    print("y_pred shape:", y_pred.shape)
     #print(K.int_shape(y_true)[0],K.shape(y_pred))
 
     depth_true = y_true[:,:,:,0]
@@ -261,14 +259,14 @@ def create_model():
     model.compile(
         optimizer='adam', 
         loss=loss_funcs, 
-        loss_weights=loss_weights,
         metrics=[
-            tf.keras.metrics.RootMeanSquaredError(), 
+            root_mean_squared_error, 
             absolute_relative_error,
             accuracy_125,
             accuracy_15625,
             accuracy_1953125
-        ]
+        ],
+        run_eagerly=True
     )
     model.summary()
 
@@ -277,9 +275,9 @@ def create_model():
     'accuracy_15625': accuracy_15625,
     'accuracy_1953125': accuracy_1953125,
     'combined_loss': combined_loss, 
-    'absolute_relative_error': absolute_relative_error
+    'absolute_relative_error': absolute_relative_error,
+    'root_mean_squared_error': root_mean_squared_error
 }
-
     return model , custom_objects
 
 
