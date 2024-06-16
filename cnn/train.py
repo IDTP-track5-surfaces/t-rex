@@ -88,6 +88,7 @@ if __name__ == "__main__":
                 date_time = LOAD_MODEL.split("/")[-2]
 
                 # Pick 3 random indices from the validation dataset
+                np.random.seed(3)
                 random_indices = np.random.choice(val_input_tensors.shape[0], 3, replace=False)
                 print("Random indices: ", random_indices)
                 # Use tf.gather to select random indices for tensors
