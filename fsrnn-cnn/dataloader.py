@@ -76,18 +76,24 @@ def preprocess_data(matched_samples):
     normal_tensors = tf.stack(normal_tensors)
 
     # Debugging depth tensor values
-    print("Depth tensor sample (post-resize):", depth_tensors[0, :5, :5, 0])
 
     max_depth_per_sample = tf.reduce_max(depth_tensors, axis=[1, 2], keepdims=True)
     normalized_depth_tensors = depth_tensors / max_depth_per_sample
 
     # Debug normalized depth tensor values
-    print("Normalized Depth Tensors sample:", normalized_depth_tensors[0, :5, :5, 0])
 
     input_tensors = tf.concat([refracted_tensors, reference_tensors], axis=-1)
 
+    depth_min = tf.reduce_min(normalized_depth_tensors, axis=[1, 2], keepdims=True)
+    depth_max = tf.reduce_max(normalized_depth_tensors, axis=[1, 2], keepdims=True)
 
-    output_tensors = tf.concat([normalized_depth_tensors, normal_tensors], axis=-1)
+    normal_min = tf.reduce_min(normal_tensors, axis=[1, 2], keepdims=True)
+    normal_max = tf.reduce_max(normal_tensors, axis=[1, 2], keepdims=True)
+
+    scale_data = tf.concat([depth_min, depth_max, normal_min, normal_max], axis=-1)
+    scale_data = tf.tile(scale_data, [1, 128, 128, 1])
+
+    output_tensors = tf.concat([normalized_depth_tensors, normal_tensors, refracted_tensors, reference_tensors, scale_data], axis=-1)
 
     return input_tensors, output_tensors
 
