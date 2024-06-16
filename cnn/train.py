@@ -47,6 +47,8 @@ if __name__ == "__main__":
     print("starting...")
     with tf.device('/gpu:0'):  # Use '/gpu:0' if TensorFlow-Metal is installed
         print("Preparing validation data...")
+        print("Is eager execution enabled: ", tf.executing_eagerly())
+        
         val_root_dir = ROOT_DIR + VAL_DATA + "/validation/" 
         val_filepaths = Filepaths(val_root_dir)
         val_input_tensors, val_output_tensors = load_and_preprocess_data(val_filepaths)
@@ -86,6 +88,7 @@ if __name__ == "__main__":
                 date_time = LOAD_MODEL.split("/")[-2]
 
                 # Pick 3 random indices from the validation dataset
+                np.random.seed(3)
                 random_indices = np.random.choice(val_input_tensors.shape[0], 3, replace=False)
                 print("Random indices: ", random_indices)
                 # Use tf.gather to select random indices for tensors

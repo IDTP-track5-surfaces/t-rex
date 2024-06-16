@@ -15,6 +15,7 @@ import numpy as np
 from scipy.interpolate import griddata
 
 import matplotlib.pyplot as plt
+import pandas as pd
 # Keras losses
 def mean_squared_error(y_true, y_pred):
     return K.mean(K.square(y_pred - y_true), axis=-1)
@@ -276,7 +277,7 @@ def calculate_metrics(y_true, y_pred):
     acc_125 = threshold_accuracy(y_true, y_pred, 1.25).numpy()
     acc_15625 = threshold_accuracy(y_true, y_pred, 1.25**2).numpy()
     acc_1953125 = threshold_accuracy(y_true, y_pred, 1.25**3).numpy()
-    rmse = tf.keras.metrics.RootMeanSquaredError()(y_true, y_pred).numpy()
+    rmse = root_mean_squared_error(y_true, y_pred).numpy()
     are = absolute_relative_error(y_true, y_pred).numpy()
 
     return acc_125, acc_15625, acc_1953125, rmse, are 
@@ -321,7 +322,7 @@ def plot_inference(infer_refracted, infer_reference, infer_true_output, infer_pr
         predictions_expanded = tf.expand_dims(infer_predictions[i], axis=0)
         acc_metrics = calculate_metrics(true_output_expanded, predictions_expanded)
         acc_125, acc_15625, acc_1953125, rmse, are = acc_metrics
-        metric_str = f"δ1: {acc_125:.3f}, δ2: {acc_15625:.3f}, δ3: {acc_1953125:.3f}\nRMSE: {rmse:.3f}, ARE: {are:.3f}"
+        metric_str = f"RMSE: {rmse:.3f} \n ARE: {are:.3f}"
         
         axes[i, 0].imshow(infer_refracted[i].numpy())
         axes[i, 0].set_title('Refracted Image')
@@ -343,7 +344,7 @@ def plot_inference(infer_refracted, infer_reference, infer_true_output, infer_pr
         plt.colorbar(im_gt, ax=axes[i, 3])
         
         axes[i, 2].annotate(metric_str, xy=(0.5, -0.1), xycoords='axes fraction', ha='center', 
-                                va='top', fontsize=8, color='white', backgroundcolor='black')
+                                va='top', fontsize=14, color='black', backgroundcolor='white')
 
     plt.tight_layout()
     plt.savefig("logs/" + str(date_time) + "/inference.png")
@@ -401,3 +402,32 @@ def grad_puff_profile(x, y, ta, depth = -0.00326456, dx=0, dy=0, width=1):
     dy = d * y
     return (dx, dy)
 
+def plot_loss(history_file):
+    # Load data from a text file
+    data = pd.read_csv(history_file, header=0)
+    # Remove any spaces from column names
+    data.columns = data.columns.str.strip()
+
+    # Extract data for plotting
+    epochs = data['Epoch']
+    training_loss = data['Training Loss']
+    validation_loss = data['Validation Loss']
+
+    # Create a plot with a logarithmic y-axis
+    plt.figure(figsize=(10, 5))
+    plt.plot(epochs, training_loss, label='Training Loss')
+    plt.plot(epochs, validation_loss, label='Validation Loss')
+
+    # Adding labels and title
+    plt.xlabel('Epoch')
+    plt.ylabel('Loss')
+    plt.title('Training and Validation Loss')
+    plt.legend()
+
+    # Show the plot
+    plt.savefig("logs/loss.png")
+    plt.show()
+
+
+if __name__ == "__main__":
+    plot_loss("/Users/mohamedgamil/Desktop/Eindhoven/block3/idp/code/t-rex/cnn/logs/20240603-181315/training_history.txt")
